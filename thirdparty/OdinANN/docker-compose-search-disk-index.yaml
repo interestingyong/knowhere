@@ -1,0 +1,42 @@
+services:
+  pipeann-builder:
+    image: registry.interesting.com:80/interesting/pipeann:latest
+    container_name: search-disk-index
+    volumes:
+      - type: bind
+        source: /root/wy/
+        target: /root/dataset
+    cpus: '10'
+    mem_limit: 128G
+    mem_reservation: 2G
+    environment:
+      DATA_TYPE: uint8
+      DATA_PATH: 100M.bin
+      INDEX_PREFIX: 100m
+      QUERY_FILE: "bigann_query.bbin"
+      TRUTH_FILE: "100M_gt.bin"
+      SAMPLE_RATE: 0.01
+      MAX_DEGREE: "128"
+      SEARCH_SIZE: "128"
+      SEARCH_THREADS: "1"
+      CONCCURENT_REQS: "32"
+      TOPK: "100"
+      DISTANCE_METRIC: "l2"
+      # 2 for PIPEANN
+      SEARCH_MODE: 2
+      L_MEMORY_INDEX: 100
+      ##ondisk_index could be more than one , such as 10 20 30 40, will query 4 times.
+      ##ondisk_indx must greather than topk
+      L_ONDISK_INDEX: "100"
+      
+    command:
+      - sh
+      - -c
+      - |
+        export PATH=/root/PipeANN/build/tests:/root/PipeANN/build/tests/utils:$$PATH &&
+        cd /root/dataset &&
+        ls /root/dataset &&
+        echo "search_disk_index $${DATA_TYPE} $${INDEX_PREFIX} $${SEARCH_THREADS} $${CONCCURENT_REQS} $${QUERY_FILE} $${TRUTH_FILE} $${TOPK} $${DISTANCE_METRIC} $${SEARCH_MODE} $${L_MEMORY_INDEX} $${L_ONDISK_INDEX}"
+        search_disk_index $${DATA_TYPE} $${INDEX_PREFIX} $${SEARCH_THREADS} $${CONCCURENT_REQS} $${QUERY_FILE} $${TRUTH_FILE} $${TOPK} $${DISTANCE_METRIC} $${SEARCH_MODE} $${L_MEMORY_INDEX} $${L_ONDISK_INDEX}
+    tty: true
+

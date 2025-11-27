@@ -1,0 +1,37 @@
+services:
+  pipeann-builder:
+    image: registry.interesting.com:80/interesting/pipeann:latest
+    container_name: build-memory-index
+    volumes:
+      - type: bind
+        source: /root/wy/
+        target: /root/dataset
+    cpus: '10'
+    mem_limit: 128G
+    mem_reservation: 2G
+    environment:
+      DATA_TYPE: uint8
+      DATA_PATH: /root/dataset/100M.bin
+      INDEX_PREFIX: 100m
+      SAMPLE_RATE: 0.01
+      MAX_DEGREE: "128"
+      SEARCH_SIZE: "128"
+      INDEX_BUILD_THREADS: "24"
+      DISTANCE_METRIC: l2
+      SPLIT_INDEX_FILE: "0"
+      #dynamic index against static index, static meaning just read after load&build.
+      DYNAMIC_INDEX: "0"
+      
+    command:
+      - sh
+      - -c
+      - |
+        export PATH=/root/PipeANN/build/tests:/root/PipeANN/build/tests/utils:$$PATH &&
+        cd /root/dataset &&
+        ls /root/dataset &&
+        echo "gen_random_slice $$DATA_TYPE  $$DATA_PATH $${INDEX_PREFIX}_SAMPLE_RATE_$${SAMPLE_RATE} $${SAMPLE_RATE}" &&
+        gen_random_slice $$DATA_TYPE  $$DATA_PATH $${INDEX_PREFIX}_SAMPLE_RATE_$${SAMPLE_RATE} $${SAMPLE_RATE} &&
+        echo "build_memory_index $$DATA_TYPE $${INDEX_PREFIX}_SAMPLE_RATE_$${SAMPLE_RATE}_data.bin $${INDEX_PREFIX}_SAMPLE_RATE_$${SAMPLE_RATE}_ids.bin $${INDEX_PREFIX}_mem.index $${DYNAMIC_INDEX} $${SPLIT_INDEX_FILE} $${MAX_DEGREE} $${SEARCH_SIZE} 1.2 $${INDEX_BUILD_THREADS} $$DISTANCE_METRIC" &&
+        build_memory_index $$DATA_TYPE $${INDEX_PREFIX}_SAMPLE_RATE_$${SAMPLE_RATE}_data.bin $${INDEX_PREFIX}_SAMPLE_RATE_$${SAMPLE_RATE}_ids.bin $${INDEX_PREFIX}_mem.index $${DYNAMIC_INDEX} $${SPLIT_INDEX_FILE} $${MAX_DEGREE} $${SEARCH_SIZE} 1.2 $${INDEX_BUILD_THREADS} $$DISTANCE_METRIC
+    tty: true
+

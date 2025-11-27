@@ -1,0 +1,38 @@
+# 使用说明:
+# 启动容器: docker-compose -f docker-compose-build-disk-index.yaml up
+# 停止容器: docker-compose -f docker-compose-build-disk-index.yaml down
+# 检查配置: docker-compose -f docker-compose-build-disk-index.yaml config
+
+
+services:
+  pipeann-builder:
+    image: registry.interesting.com:80/interesting/pipeann:latest
+    container_name: build-100m-dataset
+    volumes:
+      - type: bind
+        source: /root/wy/
+        target: /root/dataset
+    cpus: '10'
+    mem_limit: 128G
+    mem_reservation: 2G
+    environment:
+      DATA_TYPE: uint8
+      DATA_FILE: 100M.bin
+      INDEX_PREFIX_PATH: 100m
+      MAX_DEGREE: "96"
+      SEARCH_SIZE: "64"
+      MAX_MEMORY_LOAD_INDEX: "3.3"
+      MAX_MEMORY_BUILD_INDEX: "32"
+      INDEX_BUILD_THREADS: "16"
+      DISTANCE_METRIC: l2
+      SPLIT_INDEX_FILE: "0"
+    command:
+      - sh
+      - -c
+      - |
+        export PATH=/root/PipeANN/build/tests:/root/PipeANN/build/tests/utils:$$PATH &&
+        cd /root/dataset && ls /root/dataset/ &&
+        change_pts uint8 bigann.bin 100000000 &&
+        mv bigann.bin100000000  100M.bin &&
+        compute_groundtruth uint8 100M.bin bigann_query.bbin 1000 100M_gt.bin
+    tty: true
