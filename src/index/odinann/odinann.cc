@@ -1,0 +1,584 @@
+// Copyright (C) 2019-2023 Zilliz. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance
+// with the License. You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software distributed under the License
+// is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+// or implied. See the License for the specific language governing permissions and limitations under the License.
+
+#include "knowhere/feder/OdinANN.h"
+
+#include <atomic>
+#include <cstdint>
+#include <memory>
+#include <mutex>
+#include <sstream>
+#include <thread>
+
+#include "aux_utils.h"
+#include "filemanager/FileManager.h"
+#include "fmt/core.h"
+#include "index/odinann/odinann_config.h"
+#include "knowhere/comp/index_param.h"
+#include "knowhere/dataset.h"
+#include "knowhere/expected.h"
+#include "knowhere/feature.h"
+#include "knowhere/index/index_factory.h"
+#include "knowhere/log.h"
+#include "knowhere/prometheus_client.h"
+#include "knowhere/thread_pool.h"
+#include "knowhere/utils.h"
+
+// OdinANN headers
+#include "index.h"
+#include "linear_aligned_file_reader.h"
+#include "ssd_index.h"
+
+
+namespace knowhere {
+
+template <typename DataType>
+class OdinANNIndexNode : public IndexNode {
+    static_assert(KnowhereFloatTypeCheck<DataType>::value,
+                  "OdinANN only support floating point data type(float32, float16, bfloat16)");
+
+ public:
+    using DistType = float;
+    OdinANNIndexNode(const int32_t& version, const Object& object) : is_prepared_(false), dim_(-1), count_(-1) {
+        assert(typeid(object) == typeid(Pack<std::shared_ptr<milvus::FileManager>>));
+        auto odinann_index_pack = dynamic_cast<const Pack<std::shared_ptr<milvus::FileManager>>*>(&object);
+        assert(odinann_index_pack != nullptr);
+        file_manager_ = odinann_index_pack->GetPack();
+    }
+
+    Status
+    Build(const DataSetPtr dataset, std::shared_ptr<Config> cfg, bool use_knowhere_build_pool) override;
+
+    Status
+    Train(const DataSetPtr dataset, std::shared_ptr<Config> cfg, bool use_knowhere_build_pool) override {
+        return Status::not_implemented;
+    }
+
+    Status
+    Add(const DataSetPtr dataset, std::shared_ptr<Config> cfg, bool use_knowhere_build_pool) override {
+        return Status::not_implemented;
+    }
+
+    expected<DataSetPtr>
+    Search(const DataSetPtr dataset, std::unique_ptr<Config> cfg, const BitsetView& bitset,
+           milvus::OpContext* op_context) const override;
+
+    expected<DataSetPtr>
+    GetVectorByIds(const DataSetPtr dataset, milvus::OpContext* op_context) const override;
+
+    expected<std::vector<IndexNode::IteratorPtr>>
+    AnnIterator(const DataSetPtr dataset, std::unique_ptr<Config> cfg, const BitsetView& bitset,
+                bool use_knowhere_search_pool, milvus::OpContext* op_context) const override;
+
+    static bool
+    StaticHasRawData(const knowhere::BaseConfig& config, const IndexVersion& version) {
+        knowhere::MetricType metric_type = config.metric_type.has_value() ? config.metric_type.value() : "";
+        return IsMetricType(metric_type, metric::L2) || IsMetricType(metric_type, metric::COSINE);
+    }
+
+    bool
+    HasRawData(const std::string& metric_type) const override {
+        return IsMetricType(metric_type, metric::L2) || IsMetricType(metric_type, metric::COSINE);
+    }
+
+    expected<DataSetPtr>
+    GetIndexMeta(std::unique_ptr<Config> cfg) const override;
+
+    Status
+    Serialize(BinarySet& binset) const override {
+        LOG_KNOWHERE_INFO_ << "OdinANN does nothing for serialize";
+        return Status::success;
+    }
+
+    static expected<Resource>
+    StaticEstimateLoadResource(const uint64_t file_size_in_bytes, const int64_t num_rows, const int64_t dim,
+                               const knowhere::BaseConfig& config, const IndexVersion& version) {
+        return Resource{file_size_in_bytes / 4, file_size_in_bytes};
+    }
+
+    Status
+    Deserialize(const BinarySet& binset, std::shared_ptr<Config> cfg) override;
+
+    Status
+    DeserializeFromFile(const std::string& filename, std::shared_ptr<Config> config) override {
+        LOG_KNOWHERE_ERROR_ << "OdinANN doesn't support Deserialization from file.";
+        return Status::not_implemented;
+    }
+
+    static std::unique_ptr<BaseConfig>
+    StaticCreateConfig() {
+        return std::make_unique<OdinANNConfig>();
+    }
+
+    std::unique_ptr<BaseConfig>
+    CreateConfig() const override {
+        return StaticCreateConfig();
+    }
+
+    Status
+    SetFileManager(std::shared_ptr<milvus::FileManager> file_manager) {
+        if (file_manager == nullptr) {
+            LOG_KNOWHERE_ERROR_ << "Malloc error, file_manager = nullptr.";
+            return Status::malloc_error;
+        }
+        file_manager_ = file_manager;
+        return Status::success;
+    }
+
+    int64_t
+    Dim() const override {
+        if (dim_.load() == -1) {
+            LOG_KNOWHERE_ERROR_ << "Dim() function is not supported when index is not ready yet.";
+            return 0;
+        }
+        return dim_.load();
+    }
+
+    int64_t
+    Size() const override {
+        // OdinANN index size calculation
+        return 0;  // TODO: implement size calculation
+    }
+
+    int64_t
+    Count() const override {
+        if (count_.load() == -1) {
+            LOG_KNOWHERE_ERROR_ << "Count() function is not supported when index is not ready yet.";
+            return 0;
+        }
+        return count_.load();
+    }
+
+    std::string
+    Type() const override {
+        return knowhere::IndexEnum::INDEX_ODINANN;
+    }
+
+ private:
+    bool
+    LoadFile(const std::string& filename) {
+        if (!file_manager_->LoadFile(filename)) {
+            LOG_KNOWHERE_ERROR_ << "Failed to load file " << filename << ".";
+            return false;
+        }
+        return true;
+    }
+
+    bool
+    AddFile(const std::string& filename) {
+        if (!file_manager_->AddFile(filename)) {
+            LOG_KNOWHERE_ERROR_ << "Failed to add file " << filename << ".";
+            return false;
+        }
+        return true;
+    }
+
+    std::string index_prefix_;
+    mutable std::mutex preparation_lock_;
+    std::atomic_bool is_prepared_;
+    std::shared_ptr<milvus::FileManager> file_manager_;
+    std::atomic_int64_t dim_;
+    std::atomic_int64_t count_;
+    std::shared_ptr<ThreadPool> search_pool_;
+    // Underlying OdinANN SSDIndex instance for disk-resident index
+    std::unique_ptr<pipeann::SSDIndex<DataType>> ssd_index_;
+    // File reader for disk access
+    std::shared_ptr<pipeann::AlignedFileReader> file_reader_;
+    // mem index related parameters
+    uint32_t mem_L_ = 0;
+    float mem_L_ratio_ = 0.0f;
+};
+
+}  // namespace knowhere
+
+namespace knowhere {
+namespace {
+
+static constexpr float kCacheExpansionRate = 1.2;
+
+Status
+TryOdinANNCall(std::function<void()>&& odinann_call) {
+    try {
+        odinann_call();
+        return Status::success;
+    } catch (const std::exception& e) {
+        LOG_KNOWHERE_ERROR_ << "OdinANN Exception: " << e.what();
+        return Status::odinann_inner_error;
+    }
+}
+
+std::vector<std::string>
+GetNecessaryFilenames(const std::string& prefix) {
+    std::vector<std::string> filenames;
+    // OdinANN build_disk_index generates:
+    // - prefix_pq_pivots.bin
+    // - prefix_pq_compressed.bin
+    // - prefix_disk.index
+    filenames.push_back(prefix + "_pq_pivots.bin");
+    filenames.push_back(prefix + "_pq_compressed.bin");
+    filenames.push_back(prefix + "_disk.index");
+    filenames.push_back(prefix + "_disk.index_medoids.bin");
+    filenames.push_back(prefix + "_disk.index_centroids.bin");
+    return filenames;
+}
+
+std::vector<std::string>
+GetOptionalFilenames(const std::string& prefix) {
+    std::vector<std::string> filenames;
+    // Optional files for OdinANN (warmup sample file)
+    filenames.push_back(prefix + "_sample.bin");
+    // mem index file generated when mem_L > 0 during build
+    filenames.push_back(prefix + "_mem.index");
+    return filenames;
+}
+
+inline bool
+AnyIndexFileExist(const std::string& index_prefix) {
+    auto file_exist = [](std::vector<std::string> filenames) -> bool {
+        for (auto& filename : filenames) {
+            if (file_exists(filename)) {
+                return true;
+            }
+        }
+        return false;
+    };
+    return file_exist(GetNecessaryFilenames(index_prefix)) || file_exist(GetOptionalFilenames(index_prefix));
+}
+
+inline bool
+CheckMetric(const std::string& metric) {
+    if (metric != knowhere::metric::L2 && metric != knowhere::metric::IP && metric != knowhere::metric::COSINE) {
+        LOG_KNOWHERE_ERROR_ << "OdinANN currently only supports floating point data for L2, IP, and COSINE metrics.";
+        return false;
+    }
+    return true;
+}
+
+}  // namespace
+
+template <typename DataType>
+Status
+OdinANNIndexNode<DataType>::Build(const DataSetPtr dataset, std::shared_ptr<Config> cfg, bool use_knowhere_build_pool) {
+    assert(file_manager_ != nullptr);
+    std::lock_guard<std::mutex> lock(preparation_lock_);
+    auto build_conf = static_cast<const OdinANNConfig&>(*cfg);
+
+    if (!CheckMetric(build_conf.metric_type.value())) {
+        LOG_KNOWHERE_ERROR_ << "Invalid metric type: " << build_conf.metric_type.value();
+        return Status::invalid_metric_type;
+    }
+
+    if (!(build_conf.index_prefix.has_value() && build_conf.data_path.has_value())) {
+        LOG_KNOWHERE_ERROR_ << "OdinANN file path for build is empty." << std::endl;
+        return Status::invalid_param_in_json;
+    }
+
+    if (AnyIndexFileExist(build_conf.index_prefix.value())) {
+        LOG_KNOWHERE_ERROR_ << "This index prefix already has index files." << std::endl;
+        return Status::disk_file_error;
+    }
+
+    if (!LoadFile(build_conf.data_path.value())) {
+        LOG_KNOWHERE_ERROR_ << "Failed to load the raw data before building." << std::endl;
+        return Status::disk_file_error;
+    }
+
+    index_prefix_ = build_conf.index_prefix.value();
+
+    // Get metadata from data file using get_bin_metadata
+    size_t count = 0, dim = 0;
+    RETURN_IF_ERROR(TryOdinANNCall([&]() { pipeann::get_bin_metadata(build_conf.data_path.value(), count, dim); }));
+    count_.store(count);
+    dim_.store(dim);
+
+    // Convert metric type
+    pipeann::Metric metric = pipeann::Metric::L2;
+    if (IsMetricType(build_conf.metric_type.value(), knowhere::metric::IP)) {
+        metric = pipeann::Metric::INNER_PRODUCT;
+    } else if (IsMetricType(build_conf.metric_type.value(), knowhere::metric::COSINE)) {
+        metric = pipeann::Metric::COSINE;
+    }
+
+    // Build index build parameters string: R L B M T [C]
+    // R = max_degree, L = search_list_size, B = pq_code_budget_gb,
+    // M = build_dram_budget_gb, T = num_threads, C (optional) = disk_pq_dims
+    std::ostringstream param_stream;
+    param_stream << build_conf.max_degree.value() << " " << build_conf.search_list_size.value() << " "
+                 << build_conf.pq_code_budget_gb.value() << " " << build_conf.build_dram_budget_gb.value() << " "
+                 << build_conf.num_build_thread.value_or(std::thread::hardware_concurrency()) << " "
+                 << build_conf.disk_pq_dims.value();
+    std::string index_build_parameters = param_stream.str();
+
+    // Call OdinANN build_disk_index
+    RETURN_IF_ERROR(TryOdinANNCall([&]() {
+        bool res = pipeann::build_disk_index<DataType>(build_conf.data_path.value().c_str(), index_prefix_.c_str(),
+                                                       index_build_parameters.c_str(), metric,
+                                                       true,    // single_file_index
+                                                       nullptr  // tag_file
+        );
+        if (!res) {
+            throw std::runtime_error("pipeann::build_disk_index failed");
+        }
+    }));
+
+    // Add files to file manager
+    for (auto& filename : GetNecessaryFilenames(index_prefix_)) {
+        if (file_exists(filename) && !AddFile(filename)) {
+            LOG_KNOWHERE_ERROR_ << "Failed to add file " << filename << ".";
+            return Status::disk_file_error;
+        }
+    }
+
+    for (auto& filename : GetOptionalFilenames(index_prefix_)) {
+        if (file_exists(filename) && !AddFile(filename)) {
+            LOG_KNOWHERE_ERROR_ << "Failed to add optional file " << filename << ".";
+            // Don't return error for optional files
+        }
+    }
+
+    // If mem_L is requested during build, ensure mem index file is uploaded to FileManager
+    if (build_conf.mem_L.has_value() && build_conf.mem_L.value() > 0) {
+        std::string mem_index_file = index_prefix_ + "_mem.index";
+        if (file_exists(mem_index_file)) {
+            if (!AddFile(mem_index_file)) {
+                LOG_KNOWHERE_ERROR_ << "Failed to add mem index file " << mem_index_file << ".";
+                return Status::disk_file_error;
+            }
+            LOG_KNOWHERE_INFO_ << "mem index file " << mem_index_file << " added to FileManager.";
+        } else {
+            LOG_KNOWHERE_WARNING_ << "mem index requested (mem_L>0) but mem index file not found: " << mem_index_file;
+        }
+    }
+
+    is_prepared_.store(false);
+    return Status::success;
+}
+
+template <typename DataType>
+Status
+OdinANNIndexNode<DataType>::Deserialize(const BinarySet& binset, std::shared_ptr<Config> cfg) {
+    std::lock_guard<std::mutex> lock(preparation_lock_);
+    auto prep_conf = static_cast<const OdinANNConfig&>(*cfg);
+
+    if (!CheckMetric(prep_conf.metric_type.value())) {
+        return Status::invalid_metric_type;
+    }
+
+    if (is_prepared_.load()) {
+        return Status::success;
+    }
+
+    if (!prep_conf.index_prefix.has_value()) {
+        LOG_KNOWHERE_ERROR_ << "OdinANN file path for deserialize is empty." << std::endl;
+        return Status::invalid_param_in_json;
+    }
+
+    index_prefix_ = prep_conf.index_prefix.value();
+
+    // Load files from file manager
+    for (auto& filename : GetNecessaryFilenames(index_prefix_)) {
+        if (!LoadFile(filename)) {
+            LOG_KNOWHERE_ERROR_ << "Failed to load necessary file: " << filename;
+            return Status::disk_file_error;
+        }
+    }
+
+    for (auto& filename : GetOptionalFilenames(index_prefix_)) {
+        auto is_exist_op = file_manager_->IsExisted(filename);
+        if (!is_exist_op.has_value()) {
+            LOG_KNOWHERE_ERROR_ << "Failed to check existence of file " << filename << ".";
+            return Status::disk_file_error;
+        }
+        if (is_exist_op.value() && !LoadFile(filename)) {
+            LOG_KNOWHERE_WARNING_ << "Failed to load optional file: " << filename;
+            // Don't fail on optional files
+        }
+    }
+
+    // Set thread pool
+    search_pool_ = ThreadPool::GetGlobalSearchThreadPool();
+
+    // Load OdinANN SSD index structure
+    RETURN_IF_ERROR(TryOdinANNCall([&]() {
+        // choose metric
+        pipeann::Metric metric = pipeann::Metric::L2;
+        if (IsMetricType(prep_conf.metric_type.value(), knowhere::metric::IP)) {
+            metric = pipeann::Metric::INNER_PRODUCT;
+        } else if (IsMetricType(prep_conf.metric_type.value(), knowhere::metric::COSINE)) {
+            metric = pipeann::Metric::COSINE;
+        }
+
+        file_reader_ = std::make_shared<pipeann::LinuxAlignedFileReader>();
+        ssd_index_ = std::make_unique<pipeann::SSDIndex<DataType>>(metric, file_reader_, true, false, nullptr);
+
+        int load_result = ssd_index_->load(index_prefix_.c_str(), static_cast<uint32_t>(search_pool_->size()),
+                                           true,   // new_index_format
+                                           false   // use_page_search
+        );
+        if (load_result != 0) {
+            throw std::runtime_error("Failed to load SSDIndex: " + std::to_string(load_result));
+        }
+
+        // update dim_ and count_ from loaded index
+        uint64_t num_pts = ssd_index_->return_nd();
+        count_.store(static_cast<int64_t>(num_pts));
+        dim_.store(static_cast<int64_t>(ssd_index_->data_dim));
+
+        // persist mem_L and mem_L_ratio from config into this instance
+        mem_L_ = prep_conf.mem_L.has_value() ? static_cast<uint32_t>(prep_conf.mem_L.value()) : 0;
+        mem_L_ratio_ = prep_conf.mem_L_ratio.has_value() ? static_cast<float>(prep_conf.mem_L_ratio.value()) : 0.0f;
+
+        // If mem_L > 0 and mem index file exists, try to load mem index into SSDIndex
+        if (mem_L_ > 0) {
+            std::string mem_index_path = index_prefix_ + "_mem.index";
+            // FileManager should have ensured optional files were downloaded earlier if present
+            if (file_exists(mem_index_path)) {
+                LOG_KNOWHERE_INFO_ << "Loading mem index from: " << mem_index_path;
+                ssd_index_->load_mem_index(metric, static_cast<size_t>(ssd_index_->data_dim), mem_index_path);
+                LOG_KNOWHERE_INFO_ << "Loaded mem index into SSDIndex::_mem_index.";
+            } else {
+                LOG_KNOWHERE_WARNING_ << "mem_L>0 but mem index file not found: " << mem_index_path;
+            }
+        }
+    }));
+
+    is_prepared_.store(true);
+    LOG_KNOWHERE_INFO_ << "End of OdinANN loading.";
+    return Status::success;
+}
+
+template <typename DataType>
+expected<DataSetPtr>
+OdinANNIndexNode<DataType>::Search(const DataSetPtr dataset, std::unique_ptr<Config> cfg, const BitsetView& bitset,
+                                   milvus::OpContext* op_context) const {
+    if (!is_prepared_.load()) {
+        LOG_KNOWHERE_ERROR_ << "OdinANN index not loaded.";
+        return expected<DataSetPtr>::Err(Status::empty_index, "OdinANN not loaded");
+    }
+
+    auto search_conf = static_cast<const OdinANNConfig&>(*cfg);
+    if (!CheckMetric(search_conf.metric_type.value())) {
+        return expected<DataSetPtr>::Err(Status::invalid_metric_type, "unsupported metric type");
+    }
+
+    if (ssd_index_ == nullptr) {
+        LOG_KNOWHERE_ERROR_ << "OdinANN search backend not initialized.";
+        return expected<DataSetPtr>::Err(Status::not_implemented, "OdinANN search backend not initialized");
+    }
+
+    auto k = static_cast<uint64_t>(search_conf.k.value());
+    auto lsearch = static_cast<unsigned>(search_conf.search_list_size.value());
+    auto beamwidth = static_cast<uint64_t>(search_conf.beamwidth.value_or(8));
+    auto nq = dataset->GetRows();
+    auto dim = dataset->GetDim();
+    auto xq = static_cast<const DataType*>(dataset->GetTensor());
+
+    if (nq <= 0) {
+        return expected<DataSetPtr>::Err(Status::invalid_args, "nq must be >= 1");
+    }
+
+    // allocate output buffers
+    auto p_id = std::make_unique<int64_t[]>(k * nq);
+    auto p_dist = std::make_unique<DistType[]>(k * nq);
+
+    std::vector<folly::Future<folly::Unit>> futures;
+    futures.reserve(nq);
+    // use mem_L provided in search config, default to 40 when not set
+    uint32_t mem_L = search_conf.mem_L.has_value() ? static_cast<uint32_t>(search_conf.mem_L.value()) : 40u;
+    for (int64_t row = 0; row < nq; ++row) {
+        futures.emplace_back(
+            search_pool_->push([this, index = row, k, beamwidth, lsearch, dim, xq, mem_L, p_id_ptr = p_id.get(),
+                               p_dist_ptr = p_dist.get()]() {
+                try {
+                    std::unique_ptr<uint32_t[]> res_tags(new uint32_t[k]);
+                    std::unique_ptr<float[]> res_dists(new float[k]);
+                    
+                    const DataType* query = xq + (index * dim);
+                    
+                    size_t returned = ssd_index_->beam_search(query, k, mem_L, lsearch, res_tags.get(),
+                                                             res_dists.get(), beamwidth, nullptr);
+                    
+                    for (size_t i = 0; i < returned && i < k; ++i) {
+                        p_id_ptr[index * k + i] = static_cast<int64_t>(res_tags[i]);
+                        p_dist_ptr[index * k + i] = static_cast<DistType>(res_dists[i]);
+                    }
+                    // fill rest with -1 / INF
+                    for (size_t i = returned; i < k; ++i) {
+                        p_id_ptr[index * k + i] = -1;
+                        p_dist_ptr[index * k + i] = std::numeric_limits<DistType>::infinity();
+                    }
+                } catch (const std::exception& e) {
+                    LOG_KNOWHERE_ERROR_ << "OdinANN search failed: " << e.what();
+                    throw;
+                }
+            }));
+    }
+
+    if (TryOdinANNCall([&]() { WaitAllSuccess(futures); }) != Status::success) {
+        return expected<DataSetPtr>::Err(Status::odinann_inner_error, "some odinann search failed");
+    }
+
+    auto res = GenResultDataSet(nq, k, std::move(p_id), std::move(p_dist));
+    return res;
+}
+
+template <typename DataType>
+expected<DataSetPtr>
+OdinANNIndexNode<DataType>::GetVectorByIds(const DataSetPtr dataset, milvus::OpContext* op_context) const {
+    if (!is_prepared_.load()) {
+        LOG_KNOWHERE_ERROR_ << "OdinANN index not loaded.";
+        return expected<DataSetPtr>::Err(Status::empty_index, "index not loaded");
+    }
+
+    if (ssd_index_ == nullptr) {
+        LOG_KNOWHERE_ERROR_ << "OdinANN backend not initialized.";
+        return expected<DataSetPtr>::Err(Status::not_implemented, "OdinANN backend not initialized");
+    }
+
+    // Note: SSDIndex doesn't support get_vector_by_tag directly.
+    // For now, return not_implemented as this is a limitation of the disk index.
+    LOG_KNOWHERE_WARNING_ << "OdinANN SSDIndex does not support GetVectorByIds operation.";
+    return expected<DataSetPtr>::Err(Status::not_implemented,
+                                     "OdinANN disk index does not support GetVectorByIds");
+}
+
+template <typename DataType>
+expected<std::vector<IndexNode::IteratorPtr>>
+OdinANNIndexNode<DataType>::AnnIterator(const DataSetPtr dataset, std::unique_ptr<Config> cfg,
+                                        const BitsetView& bitset, bool use_knowhere_search_pool,
+                                        milvus::OpContext* op_context) const {
+    LOG_KNOWHERE_INFO_ << "OdinANN AnnIterator is not supported yet.";
+    return expected<std::vector<IndexNode::IteratorPtr>>::Err(Status::not_implemented,
+                                                              "OdinANN does not support AnnIterator");
+}
+
+template <typename DataType>
+expected<DataSetPtr>
+OdinANNIndexNode<DataType>::GetIndexMeta(std::unique_ptr<Config> cfg) const {
+    auto odinann_conf = static_cast<const OdinANNConfig&>(*cfg);
+    feder::odinann::OdinANNMeta meta(
+        odinann_conf.data_path.value_or(""), odinann_conf.max_degree.value_or(48),
+        odinann_conf.search_list_size.value_or(128), odinann_conf.pq_code_budget_gb.value_or(0),
+        odinann_conf.build_dram_budget_gb.value_or(0), odinann_conf.disk_pq_dims.value_or(0),
+        odinann_conf.accelerate_build.value_or(false), odinann_conf.mem_L.value_or(0), odinann_conf.mem_L_ratio.value_or(0.0f), Count(), std::vector<int64_t>());
+
+    Json json_meta;
+    nlohmann::to_json(json_meta, meta);
+    return GenResultDataSet(json_meta.dump(), "");
+}
+
+#ifdef KNOWHERE_WITH_CARDINAL
+KNOWHERE_SIMPLE_REGISTER_DENSE_FLOAT_ALL_GLOBAL(ODINANN_DEPRECATED, OdinANNIndexNode, knowhere::feature::DISK)
+#else
+KNOWHERE_SIMPLE_REGISTER_DENSE_FLOAT_ALL_GLOBAL(ODINANN, OdinANNIndexNode, knowhere::feature::DISK)
+#endif
+
+}  // namespace knowhere
