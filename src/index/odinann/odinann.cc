@@ -192,15 +192,19 @@ class OdinANNIndexNode : public IndexNode {
     std::unique_ptr<pipeann::SSDIndex<DataType>> ssd_index_;
     // File reader for disk access
     std::shared_ptr<pipeann::AlignedFileReader> file_reader_;
-    // mem index related parameters
-    uint32_t mem_L_ = 0;
-    float mem_L_ratio_ = 0.0f;
 };
 
 }  // namespace knowhere
 
+// Global memory index cache
+// Stores the path to the shared memory index built from sampling
+// All indices share one global mem_index to avoid duplicate construction
 namespace knowhere {
 namespace {
+static std::mutex g_mem_index_lock;
+static std::string g_mem_index_path;  // Cached global mem_index path (shared by all indices)
+static bool g_mem_index_building = false;  // Flag to indicate if mem_index is being built
+}  // namespace
 
 static constexpr float kCacheExpansionRate = 1.2;
 
@@ -344,17 +348,82 @@ OdinANNIndexNode<DataType>::Build(const DataSetPtr dataset, std::shared_ptr<Conf
         }
     }
 
-    // If mem_L is requested during build, ensure mem index file is uploaded to FileManager
-    if (build_conf.mem_L.has_value() && build_conf.mem_L.value() > 0) {
-        std::string mem_index_file = index_prefix_ + "_mem.index";
-        if (file_exists(mem_index_file)) {
-            if (!AddFile(mem_index_file)) {
-                LOG_KNOWHERE_ERROR_ << "Failed to add mem index file " << mem_index_file << ".";
-                return Status::disk_file_error;
-            }
-            LOG_KNOWHERE_INFO_ << "mem index file " << mem_index_file << " added to FileManager.";
+    // Build memory index if not exists (global cache, one-time build for all indices)
+    // Use a fixed global path so all indices share the same mem_index
+    std::string mem_index_path;
+    {
+        std::lock_guard<std::mutex> lock(g_mem_index_lock);
+        
+        if (!g_mem_index_path.empty()) {
+            // mem_index already built, use cached path
+            mem_index_path = g_mem_index_path;
+            LOG_KNOWHERE_INFO_ << "Using existing global memory index: " << mem_index_path;
+        } else if (g_mem_index_building) {
+            // Another thread is building mem_index, wait for it
+            LOG_KNOWHERE_INFO_ << "Another thread is building mem_index, waiting...";
+            // Release lock and wait a bit, then check again
         } else {
-            LOG_KNOWHERE_WARNING_ << "mem index requested (mem_L>0) but mem index file not found: " << mem_index_file;
+            // This thread will build mem_index
+            g_mem_index_building = true;
+            // Use a fixed global path instead of index_prefix-based path
+            mem_index_path = std::string(index_prefix_.c_str()) + "_odinann_global_mem.index";
+        }
+    }
+    
+    // Build mem_index outside the lock to avoid blocking other threads
+    if (mem_index_path.empty() || (!g_mem_index_path.empty() && mem_index_path == g_mem_index_path)) {
+        // mem_index already exists, skip building
+    } else if (!file_exists(mem_index_path)) {
+        // This thread needs to build mem_index
+        float sampling_rate = build_conf.sampling_rate.has_value() ? 
+            static_cast<float>(build_conf.sampling_rate.value()) : 0.01f;
+        float mem_index_alpha = build_conf.mem_index_alpha.has_value() ? 
+            static_cast<float>(build_conf.mem_index_alpha.value()) : 1.2f;
+        
+        LOG_KNOWHERE_INFO_ << "Building global memory index with sampling_rate=" << sampling_rate 
+                           << " alpha=" << mem_index_alpha;
+        
+        std::string sample_prefix = mem_index_path + "_sample";
+        RETURN_IF_ERROR(TryOdinANNCall([&]() {
+            // gen_random_slice to create sample file from data
+            pipeann::gen_random_slice<DataType>(
+                build_conf.data_path.value(), sample_prefix, sampling_rate);
+            
+            // Build in-memory index from samples
+            // R=32, L=64 are standard defaults for memory index
+            pipeann::Parameters paras;
+            paras.Set<unsigned>("R", 32);
+            paras.Set<unsigned>("L", 64);
+            paras.Set<unsigned>("C", 750);
+            paras.Set<float>("alpha", mem_index_alpha);
+            paras.Set<bool>("saturate_graph", 0);
+            paras.Set<unsigned>("num_threads", 
+                build_conf.num_build_thread.value_or(std::thread::hardware_concurrency()));
+            
+            pipeann::Index<DataType> mem_index(metric, static_cast<size_t>(dim_.load()), 
+                                               static_cast<size_t>(count_.load()), false, false, false);
+            mem_index.build((sample_prefix + "_data.bin").c_str(), 
+                           static_cast<size_t>(count_.load()), paras);
+            mem_index.save(mem_index_path.c_str());
+            
+            LOG_KNOWHERE_INFO_ << "Global memory index built and saved to " << mem_index_path;
+        }));
+        
+        // Update global cache with built path
+        {
+            std::lock_guard<std::mutex> lock(g_mem_index_lock);
+            g_mem_index_path = mem_index_path;
+            g_mem_index_building = false;
+        }
+    }
+
+    // Add memory index file to file manager if it exists
+    if (!mem_index_path.empty() && file_exists(mem_index_path)) {
+        if (!AddFile(mem_index_path)) {
+            LOG_KNOWHERE_WARNING_ << "Failed to add memory index file " << mem_index_path 
+                                  << " to FileManager (not critical).";
+        } else {
+            LOG_KNOWHERE_INFO_ << "Memory index file added to FileManager.";
         }
     }
 
@@ -432,20 +501,13 @@ OdinANNIndexNode<DataType>::Deserialize(const BinarySet& binset, std::shared_ptr
         count_.store(static_cast<int64_t>(num_pts));
         dim_.store(static_cast<int64_t>(ssd_index_->data_dim));
 
-        // persist mem_L and mem_L_ratio from config into this instance
-        mem_L_ = prep_conf.mem_L.has_value() ? static_cast<uint32_t>(prep_conf.mem_L.value()) : 0;
-        mem_L_ratio_ = prep_conf.mem_L_ratio.has_value() ? static_cast<float>(prep_conf.mem_L_ratio.value()) : 0.0f;
-
-        // If mem_L > 0 and mem index file exists, try to load mem index into SSDIndex
-        if (mem_L_ > 0) {
-            std::string mem_index_path = index_prefix_ + "_mem.index";
-            // FileManager should have ensured optional files were downloaded earlier if present
-            if (file_exists(mem_index_path)) {
-                LOG_KNOWHERE_INFO_ << "Loading mem index from: " << mem_index_path;
-                ssd_index_->load_mem_index(metric, static_cast<size_t>(ssd_index_->data_dim), mem_index_path);
-                LOG_KNOWHERE_INFO_ << "Loaded mem index into SSDIndex::_mem_index.";
-            } else {
-                LOG_KNOWHERE_WARNING_ << "mem_L>0 but mem index file not found: " << mem_index_path;
+        // Load global memory index if available
+        {
+            std::lock_guard<std::mutex> lock(g_mem_index_lock);
+            if (!g_mem_index_path.empty() && file_exists(g_mem_index_path)) {
+                LOG_KNOWHERE_INFO_ << "Loading global memory index from: " << g_mem_index_path;
+                ssd_index_->load_mem_index(metric, static_cast<size_t>(ssd_index_->data_dim), g_mem_index_path);
+                LOG_KNOWHERE_INFO_ << "Loaded global memory index into SSDIndex::_mem_index.";
             }
         }
     }));
@@ -568,7 +630,8 @@ OdinANNIndexNode<DataType>::GetIndexMeta(std::unique_ptr<Config> cfg) const {
         odinann_conf.data_path.value_or(""), odinann_conf.max_degree.value_or(48),
         odinann_conf.search_list_size.value_or(128), odinann_conf.pq_code_budget_gb.value_or(0),
         odinann_conf.build_dram_budget_gb.value_or(0), odinann_conf.disk_pq_dims.value_or(0),
-        odinann_conf.accelerate_build.value_or(false), odinann_conf.mem_L.value_or(0), odinann_conf.mem_L_ratio.value_or(0.0f), Count(), std::vector<int64_t>());
+        odinann_conf.accelerate_build.value_or(false), odinann_conf.sampling_rate.value_or(0.01f), 
+        odinann_conf.mem_index_alpha.value_or(1.2f), Count(), std::vector<int64_t>());
 
     Json json_meta;
     nlohmann::to_json(json_meta, meta);

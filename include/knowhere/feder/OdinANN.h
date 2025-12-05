@@ -32,11 +32,11 @@ struct OdinANNBuildConfig {
     uint32_t num_threads;
     uint32_t disk_pq_dims;
     bool accelerate_build;
-    uint32_t mem_L;
-    float mem_L_ratio;
+    float sampling_rate;
+    float mem_index_alpha;
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(OdinANNBuildConfig, data_path, max_degree, search_list_size, pq_code_budget_gb,
-                                   build_dram_budget_gb, num_threads, disk_pq_dims, accelerate_build, mem_L, mem_L_ratio)
+                                   build_dram_budget_gb, num_threads, disk_pq_dims, accelerate_build, sampling_rate, mem_index_alpha)
 };
 
 class OdinANNMeta {
@@ -45,7 +45,7 @@ class OdinANNMeta {
 
     OdinANNMeta(const std::string& data_path, const int32_t max_degree, const int32_t search_list_size,
                 const float pq_code_budget_gb, const float build_dram_budget_gb, const int32_t disk_pq_dims,
-                const bool accelerate_build, const uint32_t mem_L, const float mem_L_ratio,
+                const bool accelerate_build, const float sampling_rate, const float mem_index_alpha,
                 const int64_t num_elem, const std::vector<int64_t>& entry_points)
         : num_elem_(num_elem), entry_points_(entry_points) {
         build_params_.data_path = data_path;
@@ -55,8 +55,8 @@ class OdinANNMeta {
         build_params_.build_dram_budget_gb = build_dram_budget_gb;
         build_params_.disk_pq_dims = disk_pq_dims;
         build_params_.accelerate_build = accelerate_build;
-        build_params_.mem_L = mem_L;
-        build_params_.mem_L_ratio = mem_L_ratio;
+        build_params_.sampling_rate = sampling_rate;
+        build_params_.mem_index_alpha = mem_index_alpha;
     }
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(OdinANNMeta, build_params_, num_elem_, entry_points_)

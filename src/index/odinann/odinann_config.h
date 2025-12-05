@@ -73,6 +73,15 @@ class OdinANNConfig : public BaseConfig {
     // Filter threshold for PQ refinement strategy.
     CFG_FLOAT filter_threshold;
 
+    // Sampling rate for generating memory index (0.0 ~ 1.0)
+    CFG_FLOAT sampling_rate;
+
+    // Alpha parameter for memory index construction (affects graph pruning)
+    CFG_FLOAT mem_index_alpha;
+
+    // mem_L: number of neighbors cached in memory for faster search
+    CFG_INT mem_L;
+
     KNOHWERE_DECLARE_CONFIG(OdinANNConfig) {
         KNOWHERE_CONFIG_DECLARE_FIELD(max_degree)
             .description("the degree of the vamana graph index.")
@@ -153,19 +162,21 @@ class OdinANNConfig : public BaseConfig {
             .set_range(-1.0f, 1.0f)
             .for_search()
             .for_iterator();
+        KNOWHERE_CONFIG_DECLARE_FIELD(sampling_rate)
+            .description("sampling rate for generating memory index (0.0 ~ 1.0).")
+            .set_default(0.01f)
+            .set_range(0.0f, 1.0f)
+            .for_train();
+        KNOWHERE_CONFIG_DECLARE_FIELD(mem_index_alpha)
+            .description("alpha parameter for memory index construction, affects graph pruning.")
+            .set_default(1.2f)
+            .set_range(1.0f, 2.0f)
+            .for_train();
         KNOWHERE_CONFIG_DECLARE_FIELD(mem_L)
-            .description("the mem_L parameter: number of neighbors cached in memory for faster search. 0 means disabled.")
+            .description("mem_L parameter: number of neighbors cached in memory for faster search. 0 means disabled.")
             .set_default(0)
             .set_range(0, std::numeric_limits<CFG_INT::value_type>::max())
-            .for_train()
-            .for_deserialize()
             .for_search();
-        KNOWHERE_CONFIG_DECLARE_FIELD(mem_L_ratio)
-            .description("ratio (0..1) to scale mem_L according to segment size; should be < 1.0")
-            .set_default(0.0f)
-            .set_range(0.0f, 1.0f)
-            .for_train()
-            .for_deserialize();
     }
 
     Status
