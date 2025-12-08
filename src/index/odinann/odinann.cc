@@ -13,8 +13,10 @@
 
 #include <atomic>
 #include <cstdint>
+#include <cstdio>
 #include <memory>
 #include <mutex>
+#include <condition_variable>
 #include <sstream>
 #include <thread>
 
@@ -202,8 +204,11 @@ class OdinANNIndexNode : public IndexNode {
 namespace knowhere {
 namespace {
 static std::mutex g_mem_index_lock;
+static std::condition_variable g_mem_index_cv;
 static std::string g_mem_index_path;  // Cached global mem_index path (shared by all indices)
 static bool g_mem_index_building = false;  // Flag to indicate if mem_index is being built
+// Single global shared mem_index (no per-type cache)
+static std::shared_ptr<void> g_global_mem_index;  // holds std::shared_ptr<pipeann::Index<...>> casted to void
 }  // namespace
 
 static constexpr float kCacheExpansionRate = 1.2;
@@ -348,72 +353,125 @@ OdinANNIndexNode<DataType>::Build(const DataSetPtr dataset, std::shared_ptr<Conf
         }
     }
 
-    // Build memory index if not exists (global cache, one-time build for all indices)
+    // Build memory index if not exists (single global instance, one-time build for all indices)
     // Use a fixed global path so all indices share the same mem_index
     std::string mem_index_path;
+    bool need_build = false;
+    std::shared_ptr<pipeann::Index<DataType>> mem_index_ptr = nullptr;
     {
-        std::lock_guard<std::mutex> lock(g_mem_index_lock);
-        
+        std::unique_lock<std::mutex> lock(g_mem_index_lock);
         if (!g_mem_index_path.empty()) {
-            // mem_index already built, use cached path
             mem_index_path = g_mem_index_path;
             LOG_KNOWHERE_INFO_ << "Using existing global memory index: " << mem_index_path;
         } else if (g_mem_index_building) {
-            // Another thread is building mem_index, wait for it
             LOG_KNOWHERE_INFO_ << "Another thread is building mem_index, waiting...";
-            // Release lock and wait a bit, then check again
+            // wait until the building flag is cleared (notified by builder)
+            g_mem_index_cv.wait(lock, [] { return !g_mem_index_building; });
+            if (!g_mem_index_path.empty()) {
+                mem_index_path = g_mem_index_path;
+                LOG_KNOWHERE_INFO_ << "Global memory index became available: " << mem_index_path;
+            }
         } else {
             // This thread will build mem_index
             g_mem_index_building = true;
-            // Use a fixed global path instead of index_prefix-based path
+            need_build = true;
             mem_index_path = std::string(index_prefix_.c_str()) + "_odinann_global_mem.index";
         }
     }
-    
-    // Build mem_index outside the lock to avoid blocking other threads
-    if (mem_index_path.empty() || (!g_mem_index_path.empty() && mem_index_path == g_mem_index_path)) {
-        // mem_index already exists, skip building
-    } else if (!file_exists(mem_index_path)) {
-        // This thread needs to build mem_index
-        float sampling_rate = build_conf.sampling_rate.has_value() ? 
-            static_cast<float>(build_conf.sampling_rate.value()) : 0.01f;
-        float mem_index_alpha = build_conf.mem_index_alpha.has_value() ? 
-            static_cast<float>(build_conf.mem_index_alpha.value()) : 1.2f;
-        
-        LOG_KNOWHERE_INFO_ << "Building global memory index with sampling_rate=" << sampling_rate 
-                           << " alpha=" << mem_index_alpha;
-        
+
+    // If we need to build the mem_index and file doesn't exist, construct it
+    if (need_build && !file_exists(mem_index_path)) {
+        float sampling_rate = build_conf.sampling_rate.has_value() ? static_cast<float>(build_conf.sampling_rate.value()) : 0.01f;
+        float mem_index_alpha = build_conf.mem_index_alpha.has_value() ? static_cast<float>(build_conf.mem_index_alpha.value()) : 1.2f;
+
+        LOG_KNOWHERE_INFO_ << "=== Building global memory index ===";
+        LOG_KNOWHERE_INFO_ << "Target mem_index path: " << mem_index_path;
+        LOG_KNOWHERE_INFO_ << "Sampling rate: " << sampling_rate << ", Alpha: " << mem_index_alpha;
+
         std::string sample_prefix = mem_index_path + "_sample";
-        RETURN_IF_ERROR(TryOdinANNCall([&]() {
+        LOG_KNOWHERE_INFO_ << "Sample file prefix: " << sample_prefix;
+
+        // Build mem_index inside TryOdinANNCall; capture mem_index_ptr
+        Status build_mem_status = TryOdinANNCall([&]() {
             // gen_random_slice to create sample file from data
-            pipeann::gen_random_slice<DataType>(
-                build_conf.data_path.value(), sample_prefix, sampling_rate);
-            
+            LOG_KNOWHERE_INFO_ << "Generating random samples from data file...";
+            pipeann::gen_random_slice<DataType>(build_conf.data_path.value(), sample_prefix, sampling_rate);
+            LOG_KNOWHERE_INFO_ << "Sample generation completed.";
+
             // Build in-memory index from samples
-            // R=32, L=64 are standard defaults for memory index
+            LOG_KNOWHERE_INFO_ << "Building in-memory index from samples...";
             pipeann::Parameters paras;
             paras.Set<unsigned>("R", 32);
             paras.Set<unsigned>("L", 64);
             paras.Set<unsigned>("C", 750);
             paras.Set<float>("alpha", mem_index_alpha);
             paras.Set<bool>("saturate_graph", 0);
-            paras.Set<unsigned>("num_threads", 
-                build_conf.num_build_thread.value_or(std::thread::hardware_concurrency()));
-            
-            pipeann::Index<DataType> mem_index(metric, static_cast<size_t>(dim_.load()), 
-                                               static_cast<size_t>(count_.load()), false, false, false);
-            mem_index.build((sample_prefix + "_data.bin").c_str(), 
-                           static_cast<size_t>(count_.load()), paras);
-            mem_index.save(mem_index_path.c_str());
-            
-            LOG_KNOWHERE_INFO_ << "Global memory index built and saved to " << mem_index_path;
-        }));
-        
-        // Update global cache with built path
+            paras.Set<unsigned>("num_threads", build_conf.num_build_thread.value_or(std::thread::hardware_concurrency()));
+
+            mem_index_ptr = std::make_shared<pipeann::Index<DataType>>(metric, static_cast<size_t>(dim_.load()),
+                                                                       static_cast<size_t>(count_.load()), false, false, false);
+            mem_index_ptr->build((sample_prefix + "_data.bin").c_str(), static_cast<size_t>(count_.load()), paras);
+            LOG_KNOWHERE_INFO_ << "In-memory index built successfully.";
+
+            LOG_KNOWHERE_INFO_ << "Saving in-memory index to disk...";
+            mem_index_ptr->save(mem_index_path.c_str());
+            LOG_KNOWHERE_INFO_ << "Global memory index saved to " << mem_index_path;
+        });
+
+        if (build_mem_status != Status::success) {
+            LOG_KNOWHERE_ERROR_ << "Failed to build global memory index. Status: " << static_cast<int>(build_mem_status);
+            LOG_KNOWHERE_INFO_ << "Cleaning up sample files...";
+            // Try to remove sample files on build failure
+            std::string sample_data_file = sample_prefix + "_data.bin";
+            std::string sample_meta_file = sample_prefix + "_meta.bin";
+            try {
+                if (file_exists(sample_data_file)) {
+                    std::remove(sample_data_file.c_str());
+                    LOG_KNOWHERE_INFO_ << "Removed sample file: " << sample_data_file;
+                }
+                if (file_exists(sample_meta_file)) {
+                    std::remove(sample_meta_file.c_str());
+                    LOG_KNOWHERE_INFO_ << "Removed sample file: " << sample_meta_file;
+                }
+            } catch (const std::exception& e) {
+                LOG_KNOWHERE_WARNING_ << "Exception while cleaning up sample files: " << e.what();
+            }
+            std::lock_guard<std::mutex> lock(g_mem_index_lock);
+            g_mem_index_building = false;
+            g_mem_index_cv.notify_all();
+            return build_mem_status;
+        }
+
+        // Update global path and attach in-memory pointer under lock, then notify waiters
         {
             std::lock_guard<std::mutex> lock(g_mem_index_lock);
             g_mem_index_path = mem_index_path;
+            if (mem_index_ptr) {
+                g_global_mem_index = std::static_pointer_cast<void>(mem_index_ptr);
+                LOG_KNOWHERE_INFO_ << "Global memory index in-memory pointer set and ready for use.";
+            }
             g_mem_index_building = false;
+            LOG_KNOWHERE_INFO_ << "=== Global memory index build complete ===";
+            LOG_KNOWHERE_INFO_ << "Notifying " << "waiting threads...";
+            g_mem_index_cv.notify_all();
+        }
+    } else {
+        // If mem_index file already exists (or another thread built it), ensure global pointer is loaded
+        std::lock_guard<std::mutex> lock(g_mem_index_lock);
+        if (!mem_index_path.empty() && file_exists(mem_index_path) && g_global_mem_index == nullptr) {
+            LOG_KNOWHERE_INFO_ << "Mem_index file already exists, loading into global pointer: " << mem_index_path;
+            try {
+                auto mem_index_local = std::make_shared<pipeann::Index<DataType>>(metric, static_cast<size_t>(dim_.load()),
+                                                                                   static_cast<size_t>(count_.load()), false, false, false);
+                LOG_KNOWHERE_INFO_ << "Loading mem_index from file...";
+                mem_index_local->load(mem_index_path.c_str());
+                g_global_mem_index = std::static_pointer_cast<void>(mem_index_local);
+                LOG_KNOWHERE_INFO_ << "Successfully loaded global memory index into g_global_mem_index.";
+            } catch (const std::exception& e) {
+                LOG_KNOWHERE_WARNING_ << "Failed to load existing mem_index into global pointer: " << e.what();
+            }
+        } else if (g_global_mem_index != nullptr) {
+            LOG_KNOWHERE_INFO_ << "Global memory index already loaded in memory, skipping reload.";
         }
     }
 
@@ -501,13 +559,23 @@ OdinANNIndexNode<DataType>::Deserialize(const BinarySet& binset, std::shared_ptr
         count_.store(static_cast<int64_t>(num_pts));
         dim_.store(static_cast<int64_t>(ssd_index_->data_dim));
 
-        // Load global memory index if available
+        // Load global memory index if available (single global instance, not per-instance)
         {
             std::lock_guard<std::mutex> lock(g_mem_index_lock);
             if (!g_mem_index_path.empty() && file_exists(g_mem_index_path)) {
                 LOG_KNOWHERE_INFO_ << "Loading global memory index from: " << g_mem_index_path;
-                ssd_index_->load_mem_index(metric, static_cast<size_t>(ssd_index_->data_dim), g_mem_index_path);
-                LOG_KNOWHERE_INFO_ << "Loaded global memory index into SSDIndex::_mem_index.";
+                if (g_global_mem_index == nullptr) {
+                    auto mem_index = std::make_shared<pipeann::Index<DataType>>(metric,
+                        static_cast<size_t>(ssd_index_->data_dim),
+                        static_cast<size_t>(ssd_index_->return_nd()),
+                        false, false, false);
+                    mem_index->load(g_mem_index_path.c_str());
+                    // store into single global pointer (cast to void)
+                    g_global_mem_index = std::static_pointer_cast<void>(mem_index);
+                    LOG_KNOWHERE_INFO_ << "Loaded global memory index into g_global_mem_index.";
+                } else {
+                    LOG_KNOWHERE_INFO_ << "Global memory index already loaded.";
+                }
             }
         }
     }));
@@ -556,12 +624,14 @@ OdinANNIndexNode<DataType>::Search(const DataSetPtr dataset, std::unique_ptr<Con
     
     // Determine mem_L: use config value if mem_index is ready, otherwise force to 0
     uint32_t mem_L;
+    std::shared_ptr<pipeann::Index<DataType>> shared_mem_index;
     {
         std::lock_guard<std::mutex> lock(g_mem_index_lock);
         if (g_mem_index_building || g_mem_index_path.empty()) {
             // mem_index not yet ready (still building or never built)
             // Force mem_L to 0 to avoid reading uninitialized memory
             mem_L = 0;
+            shared_mem_index = nullptr;
             if (search_conf.mem_L.has_value() && search_conf.mem_L.value() > 0) {
                 LOG_KNOWHERE_WARNING_ << "mem_index not ready yet. Forcing mem_L from " 
                                       << search_conf.mem_L.value() << " to 0 for safety.";
@@ -569,20 +639,32 @@ OdinANNIndexNode<DataType>::Search(const DataSetPtr dataset, std::unique_ptr<Con
         } else {
             // mem_index is ready, use configured mem_L value, default to 40
             mem_L = search_conf.mem_L.has_value() ? static_cast<uint32_t>(search_conf.mem_L.value()) : 40u;
+            // Get shared mem_index from single global instance
+            if (g_global_mem_index != nullptr) {
+                shared_mem_index = std::static_pointer_cast<pipeann::Index<DataType>>(g_global_mem_index);
+            }
         }
     }
     for (int64_t row = 0; row < nq; ++row) {
         futures.emplace_back(
-            search_pool_->push([this, index = row, k, beamwidth, lsearch, dim, xq, mem_L, p_id_ptr = p_id.get(),
-                               p_dist_ptr = p_dist.get()]() {
+            search_pool_->push([this, index = row, k, beamwidth, lsearch, dim, xq, mem_L, shared_mem_index,
+                               p_id_ptr = p_id.get(), p_dist_ptr = p_dist.get()]() {
                 try {
                     std::unique_ptr<uint32_t[]> res_tags(new uint32_t[k]);
                     std::unique_ptr<float[]> res_dists(new float[k]);
                     
                     const DataType* query = xq + (index * dim);
                     
-                    size_t returned = ssd_index_->beam_search(query, k, mem_L, lsearch, res_tags.get(),
-                                                             res_dists.get(), beamwidth, nullptr);
+                    // Use pipe_search_with_outer_memindex if shared_mem_index is available, otherwise use beam_search
+                    size_t returned;
+                    if (shared_mem_index != nullptr) {
+                        returned = ssd_index_->pipe_search_with_outer_memindex(query, k, mem_L, lsearch, res_tags.get(),
+                                                                              res_dists.get(), beamwidth, 
+                                                                              shared_mem_index.get(), nullptr);
+                    } else {
+                        returned = ssd_index_->beam_search(query, k, mem_L, lsearch, res_tags.get(),
+                                                          res_dists.get(), beamwidth, nullptr);
+                    }
                     
                     for (size_t i = 0; i < returned && i < k; ++i) {
                         p_id_ptr[index * k + i] = static_cast<int64_t>(res_tags[i]);

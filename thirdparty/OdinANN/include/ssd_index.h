@@ -209,6 +209,12 @@ namespace pipeann {
     size_t pipe_search(const T *query, const _u64 k_search, const _u32 mem_L, const _u64 l_search, TagT *res_tags,
                        float *res_dists, const _u64 beam_width, QueryStats *stats = nullptr);
 
+    // pipe_search with external mem_index (not loaded into SSDIndex)
+    // Useful when mem_index is managed externally (e.g., by knowhere)
+    size_t pipe_search_with_outer_memindex(const T *query, const _u64 k_search, const _u32 mem_L, const _u64 l_search,
+                                           TagT *res_tags, float *res_dists, const _u64 beam_width, 
+                                           Index<T> *outer_mem_index, QueryStats *stats = nullptr);
+
     std::vector<uint32_t> get_init_ids() {
       return std::vector<uint32_t>(this->medoids, this->medoids + this->num_medoids);
     }
