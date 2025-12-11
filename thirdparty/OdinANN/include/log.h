@@ -10,6 +10,8 @@
 #include <sstream>
 #include <string>
 
+namespace utils {
+
 // Attention: stringstream has multi-thread performance issues,
 // but never mind because no one will frequently log in the multi-threading
 // case.
@@ -50,9 +52,12 @@ class LogStream {
   std::stringstream ss_;
 };
 
+}  // namespace utils
+
 #define LOG(level) \
   if (true)        \
-  LogStream(__FILE__, __LINE__, #level)
+  ::utils::LogStream(__FILE__, __LINE__, #level)
+
 #ifdef NDEBUG
 class NullStream {
  public:
@@ -69,6 +74,7 @@ class NullStream {
 #else
 #define DLOG(level) LOG(level)
 #endif  // NDEBUG
+
 #endif  // USE_GLOG
 
 #endif  // UTILS_LOG_H_

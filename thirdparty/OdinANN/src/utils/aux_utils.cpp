@@ -750,7 +750,7 @@ namespace pipeann {
 
     LOG(INFO) << "Generating PQ pivots with training data of size: " << train_size
               << " num PQ chunks: " << num_pq_chunks;
-    generate_pq_pivots(train_data, train_size, (uint32_t) dim, 256, (uint32_t) num_pq_chunks, NUM_KMEANS,
+    pipeann::generate_pq_pivots(train_data, train_size, (uint32_t) dim, 256, (uint32_t) num_pq_chunks, NUM_KMEANS,
                        pq_pivots_path);
     auto end = std::chrono::high_resolution_clock::now();
 

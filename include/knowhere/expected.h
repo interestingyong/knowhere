@@ -52,6 +52,7 @@ enum class Status {
     brute_force_inner_error = 30,
     emb_list_inner_error = 31,
     aisaq_error = 32,
+    odinann_inner_error = 33,
 };
 
 inline std::string

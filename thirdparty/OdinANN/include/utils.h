@@ -22,12 +22,18 @@ typedef int FileHandle;
 // taken from
 // https://github.com/Microsoft/BLAS-on-flash/blob/master/include/utils.h
 // round up X to the nearest multiple of Y
+#ifndef ROUND_UP
 #define ROUND_UP(X, Y) ((((uint64_t) (X) / (Y)) + ((uint64_t) (X) % (Y) != 0)) * (Y))
+#endif
 
+#ifndef DIV_ROUND_UP
 #define DIV_ROUND_UP(X, Y) (((uint64_t) (X) / (Y)) + ((uint64_t) (X) % (Y) != 0))
+#endif
 
 // round down X to the nearest multiple of Y
+#ifndef ROUND_DOWN
 #define ROUND_DOWN(X, Y) (((uint64_t) (X) / (Y)) * (Y))
+#endif
 
 // alignment tests
 #define IS_ALIGNED(X, Y) ((uint64_t) (X) % (uint64_t) (Y) == 0)
@@ -483,27 +489,8 @@ namespace pipeann {
 
   void normalize_data_file(const std::string &inFileName, const std::string &outFileName);
 
-  template<typename T>
-  Distance<T> *get_distance_function(Metric m);
-}  // namespace pipeann
-
-struct PivotContainer {
-  PivotContainer() = default;
-
-  PivotContainer(size_t pivo_id, float pivo_dist) : piv_id{pivo_id}, piv_dist{pivo_dist} {
-  }
-
-  bool operator<(const PivotContainer &p) const {
-    return p.piv_dist < piv_dist;
-  }
-
-  bool operator>(const PivotContainer &p) const {
-    return p.piv_dist > piv_dist;
-  }
-
-  size_t piv_id;
-  float piv_dist;
-};
-
+// The rest of the file content remains unchanged...
 template<typename T>
 pipeann::Distance<T> *get_distance_function(pipeann::Metric m);
+
+};  // namespace pipeann

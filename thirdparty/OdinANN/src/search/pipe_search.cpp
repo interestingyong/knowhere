@@ -20,7 +20,6 @@
 #ifndef USE_AIO
 #include "liburing.h"
 #endif
-
 namespace pipeann {
   struct io_t {
     Neighbor nbr;

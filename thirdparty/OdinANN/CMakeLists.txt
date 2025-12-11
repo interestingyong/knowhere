@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0)
-project(pipeann)
+project(odinann)
 
 set(CMAKE_STANDARD 17)
 option(USE_AIO "Use AIO instead of liburing" ON)
@@ -8,9 +8,17 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # set(CMAKE_C_COMPILER_LAUNCHER ccache)
 # set(CMAKE_CXX_COMPILER_LAUNCHER ccache)
 
+# Check if liburing is installed in a custom location
+if(EXISTS ${PROJECT_SOURCE_DIR}/third_party/liburing/install)
+    set(LIBURING_CUSTOM_INSTALL TRUE)
+    set(LIBURING_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/third_party/liburing/install/include)
+    set(LIBURING_LIB_DIR ${PROJECT_SOURCE_DIR}/third_party/liburing/install/lib)
+endif()
+
 include_directories(
 	${PROJECT_SOURCE_DIR}/include 
 	${PROJECT_SOURCE_DIR}/include/tsl/include 
+	${LIBURING_INCLUDE_DIR}
 )
 
 add_compile_options(
@@ -55,6 +63,7 @@ include_directories(
 )
 link_directories(
 	${PROJECT_SOURCE_DIR}/third_party/liburing/src
+	${LIBURING_LIB_DIR}
 )
 
 if(USE_AIO)
@@ -63,7 +72,11 @@ if(USE_AIO)
 	add_definitions(-DUSE_AIO)
 else()
 	message(STATUS "Using liburing for asynchronous I/O, faster but requires kernel support.")
-	link_libraries(uring)
+	if(LIBURING_CUSTOM_INSTALL)
+		link_libraries(${LIBURING_LIB_DIR}/liburing.a)
+	else()
+		link_libraries(uring)
+	endif()
 endif()
 
 link_libraries(
@@ -99,38 +112,41 @@ elseif(COMPILE_RESULT AND RUN_RESULT EQUAL 1) # AVX2
 	set(CPU_SUPPORTS_AVX2 TRUE)
 	message(STATUS "CPU supports AVX2")
 else()
-	message(STATUS "CPU does not support AVX512 or detection failed")
+	message(STATUS "CPU doesn't support AVX512 or AVX2")
 endif()
 
-if(COMPILER_SUPPORTS_AVX512F AND CPU_SUPPORTS_AVX512)
-    message(STATUS "Compiler and CPU supports -mavx512f. Enabling AVX512F.")
-	add_definitions(-DUSE_AVX512)
-elseif(COMPILER_SUPPORTS_AVX2 AND CPU_SUPPORTS_AVX2)
-	message(STATUS "Compiler and CPU supports -mavx2. Enabling AVX2.")
-	add_definitions(-DUSE_AVX2)
-else()
-    message(STATUS "Compiler or CPU do not support -mavx512f and -mavx2.")
+if(CPU_SUPPORTS_AVX512)
+	add_definitions(-mavx512f)
+elseif(CPU_SUPPORTS_AVX2)
+	add_definitions(-mavx2)
 endif()
 
-#OpenMP
-find_package(OpenMP)
-if (OPENMP_FOUND)
-    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
-    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
-else()
-    message(FATAL_ERROR "No OpenMP support")
-endif()
+file(GLOB_RECURSE SOURCES 
+	"src/*.cpp"
+	"src/*.c"
+	"src/*/*.cpp"
+	"src/*/*.c"
+)
 
-	
-find_package(BLAS)
-if(BLAS_FOUND)
-    message(STATUS "BLAS found")
-    link_libraries(${BLAS_LIBRARIES})
-else()
-    message(FATAL_ERROR "BLAS is required but was not found.")
-endif()
+add_library(odinann STATIC ${SOURCES})
 
-add_subdirectory(src)
-add_subdirectory(tests)
-add_subdirectory(tests/utils)
-# add_subdirectory(python)
+add_executable(search_memory_index tests/search_memory_index.cpp)
+target_link_libraries(search_memory_index odinann)
+
+add_executable(build_memory_index tests/build_memory_index.cpp)
+target_link_libraries(build_memory_index odinann)
+
+add_executable(search_disk_index tests/search_disk_index.cpp)
+target_link_libraries(search_disk_index odinann)
+
+add_executable(build_disk_index tests/build_disk_index.cpp)
+target_link_libraries(build_disk_index odinann)
+
+add_executable(update_disk_index tests/update_disk_index.cpp)
+target_link_libraries(update_disk_index odinann)
+
+add_executable(search_cache_index tests/search_cache_index.cpp)
+target_link_libraries(search_cache_index odinann)
+
+add_executable(build_cache_index tests/build_cache_index.cpp)
+target_link_libraries(build_cache_index odinann)

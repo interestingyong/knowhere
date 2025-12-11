@@ -10,6 +10,8 @@
 #include <malloc.h>
 #include <cstdio>
 
+namespace pipeann {
+
 class AlignedFileReader {
  public:
   // returns the thread-specific io ring.
@@ -82,3 +84,5 @@ class AlignedFileReader {
   virtual void deregister_thread() = 0;
   virtual void deregister_all_threads() = 0;
 };
+
+} // namespace pipeann

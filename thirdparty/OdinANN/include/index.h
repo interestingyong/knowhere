@@ -13,7 +13,7 @@
 #include "parameters.h"
 #include "utils.h"
 
-#include "neighbor.h"
+// 移除了重复的 #include "neighbor.h"
 
 #define OVERHEAD_FACTOR 1.1
 #define SLACK_FACTOR 1.3

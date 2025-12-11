@@ -159,4 +159,4 @@ namespace pipeann {
     addr[right] = nn;
     return right;
   }
-}  // namespace pipeann
+}; // namespace pipeann

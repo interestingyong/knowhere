@@ -36,7 +36,7 @@
 
 // OdinANN headers
 #include "index.h"
-#include "linear_aligned_file_reader.h"
+#include "linux_aligned_file_reader.h"
 #include "ssd_index.h"
 
 
@@ -271,7 +271,6 @@ CheckMetric(const std::string& metric) {
     return true;
 }
 
-}  // namespace
 
 template <typename DataType>
 Status

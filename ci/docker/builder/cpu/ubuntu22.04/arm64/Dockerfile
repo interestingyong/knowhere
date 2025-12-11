@@ -1,4 +1,7 @@
-FROM ubuntu:22.04
+FROM docker.m.daocloud.io/ubuntu:22.04
+
+ENV https_proxy=http://192.168.1.202:8889
+ENV http_proxy=http://192.168.1.202:8889
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV CMAKE_VERSION="v3.28.5"
@@ -47,10 +50,12 @@ RUN apt update \
     && pip3 install conan==1.61.0 \
     && conan remote add default-conan-local https://milvus01.jfrog.io/artifactory/api/conan/default-conan-local
 
-# clone knowhere repo and build to update .conan
-RUN git clone https://github.com/zilliztech/knowhere.git \
-    && cd knowhere \
-    && mkdir build && cd build \
-    && conan install .. --build=missing -o with_ut=True -o with_diskann=True -s compiler.libcxx=libstdc++11 -s build_type=Release \
-    && conan build .. \
-    && cd ../.. && rm -rf knowhere
+RUN  apt install -y liburing-dev 
+
+#COPY knowhere /knowhere
+# 构建knowhere
+#RUN cd knowhere \
+#    && mkdir -p build && cd build \
+#    && conan install .. --build=missing -o with_ut=True -o with_diskann=True -o with_odinann=True -s compiler.libcxx=libstdc++11 -s build_type=Release \
+    #&& conan build .. \
+    #&& cd ../.. && rm -rf knowhere

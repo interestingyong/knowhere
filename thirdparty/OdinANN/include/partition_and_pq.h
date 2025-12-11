@@ -7,6 +7,8 @@
 const uint32_t NUM_PQ_CENTERS = 256;
 const uint32_t NUM_K_MEANS_ITERS = 15;
 
+namespace pipeann {
+
 template<typename T>
 void gen_random_slice(const std::string base_file, const std::string output_prefix, double sampling_rate,
                       size_t offset = 0);
@@ -22,6 +24,9 @@ void gen_random_slice(const std::string data_file, double p_val, float *&sampled
 template<typename T>
 void gen_random_slice(const T *inputdata, size_t npts, size_t ndims, double p_val, float *&sampled_data,
                       size_t &slice_size);
+
+
+
 
 template<typename T>
 int estimate_cluster_sizes(const std::string data_file, float *pivots, const size_t num_centers, const size_t dim,
@@ -46,3 +51,5 @@ int generate_pq_pivots(const float *train_data, size_t num_train, unsigned dim, 
 template<typename T>
 int generate_pq_data_from_pivots(const std::string data_file, unsigned num_centers, unsigned num_pq_chunks,
                                  std::string pq_pivots_path, std::string pq_compressed_vectors_path, size_t offset = 0);
+
+} // namespace pipeann
