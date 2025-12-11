@@ -539,7 +539,6 @@ int generate_pq_data_from_pivots(const std::string data_file, unsigned num_cente
   return 0;
 }
 
-namespace pipeann {
 
 template<typename T>
 int estimate_cluster_sizes(const std::string data_file, float *pivots, const size_t num_centers, const size_t dim,
@@ -690,7 +689,6 @@ int shard_data_into_clusters(const std::string data_file, float *pivots, const s
   return 0;
 }
 
-namespace pipeann {
 
 template<typename T>
 int partition_with_ram_budget(const std::string data_file, const double sampling_rate, double ram_budget,
@@ -757,30 +755,57 @@ int partition_with_ram_budget(const std::string data_file, const double sampling
   delete[] train_data_float;
   return num_parts;
 }
+/*
+// 1. 重载1（3个参数）：对应图片中的调用
+template void gen_random_slice<int8_t>(const std::string base_file, 
+                                       const std::string output_prefix,
+                                       double sampling_rate, size_t offset);
+template void gen_random_slice<uint8_t>(const std::string base_file, 
+                                        const std::string output_prefix,
+                                        double sampling_rate, size_t offset);
+template void gen_random_slice<float>(const std::string base_file, 
+                                      const std::string output_prefix,
+                                      double sampling_rate, size_t offset);
+
+// 2. 重载3（5个参数，返回float*）：对应图片中的调用
+template void gen_random_slice<float>(const std::string data_file, 
+                                      double p_val, float *&sampled_data,
+                                      size_t &slice_size, size_t &ndims);
+template void gen_random_slice<uint8_t>(const std::string data_file, 
+                                        double p_val, float *&sampled_data,
+                                        size_t &slice_size, size_t &ndims);
+template void gen_random_slice<int8_t>(const std::string data_file, 
+                                       double p_val, float *&sampled_data,
+                                       size_t &slice_size, size_t &ndims); */
 
 } // namespace pipeann
 
-// Instantations of supported templates
-template void pipeann::gen_random_slice<float>(const std::string data_file, double p_val, std::unique_ptr<float[]> &sampled_data,
-                                      size_t &slice_size, size_t &ndims);
-template void pipeann::gen_random_slice<uint8_t>(const std::string data_file, double p_val, std::unique_ptr<float[]> &sampled_data,
-                                        size_t &slice_size, size_t &ndims);
-template void pipeann::gen_random_slice<int8_t>(const std::string data_file, double p_val, std::unique_ptr<float[]> &sampled_data,
-                                       size_t &slice_size, size_t &ndims);
 
-template void pipeann::gen_random_slice<float>(const std::string data_file, double p_val, float *&sampled_data,
-                                      size_t &slice_size, size_t &ndims);
-template void pipeann::gen_random_slice<uint8_t>(const std::string data_file, double p_val, float *&sampled_data,
-                                        size_t &slice_size, size_t &ndims);
-template void pipeann::gen_random_slice<int8_t>(const std::string data_file, double p_val, float *&sampled_data,
-                                       size_t &slice_size, size_t &ndims);
 
-template void pipeann::gen_random_slice<float>(const std::string base_file, const std::string output_prefix,
-                                      double sampling_rate, size_t offset);
-template void pipeann::gen_random_slice<uint8_t>(const std::string base_file, const std::string output_prefix,
-                                        double sampling_rate, size_t offset);
-template void pipeann::gen_random_slice<int8_t>(const std::string base_file, const std::string output_prefix,
+// 只实例化实际被调用的重载
+
+
+// 1. 重载1（3个参数）：对应图片中的调用
+template void pipeann::gen_random_slice<int8_t>(const std::string base_file, 
+                                       const std::string output_prefix,
                                        double sampling_rate, size_t offset);
+template void pipeann::gen_random_slice<uint8_t>(const std::string base_file, 
+                                        const std::string output_prefix,
+                                        double sampling_rate, size_t offset);
+template void pipeann::gen_random_slice<float>(const std::string base_file, 
+                                      const std::string output_prefix,
+                                      double sampling_rate, size_t offset);
+
+// 2. 重载3（5个参数，返回float*）：对应图片中的调用
+template void pipeann::gen_random_slice<float>(const std::string data_file, 
+                                      double p_val, float *&sampled_data,
+                                      size_t &slice_size, size_t &ndims);
+template void pipeann::gen_random_slice<uint8_t>(const std::string data_file, 
+                                        double p_val, float *&sampled_data,
+                                        size_t &slice_size, size_t &ndims);
+template void pipeann::gen_random_slice<int8_t>(const std::string data_file, 
+                                       double p_val, float *&sampled_data,
+                                       size_t &slice_size, size_t &ndims); 
 
 template int pipeann::partition_with_ram_budget<int8_t>(const std::string data_file, const double sampling_rate,
                                                double ram_budget, size_t graph_degree, const std::string prefix_path,
