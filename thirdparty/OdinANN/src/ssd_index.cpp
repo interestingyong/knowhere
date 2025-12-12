@@ -42,6 +42,7 @@
 #include <unistd.h>
 #include <sys/syscall.h>
 #include "tsl/robin_set.h"
+#include "ssd_index.h"
 
 namespace pipeann {
   template<typename T>

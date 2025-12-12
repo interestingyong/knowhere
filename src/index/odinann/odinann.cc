@@ -254,7 +254,7 @@ inline bool
 AnyIndexFileExist(const std::string& index_prefix) {
     auto file_exist = [](std::vector<std::string> filenames) -> bool {
         for (auto& filename : filenames) {
-            if (file_exists(filename)) {
+            if (pipeann::file_exists(filename)) {
                 return true;
             }
         }
@@ -340,14 +340,14 @@ OdinANNIndexNode<DataType>::Build(const DataSetPtr dataset, std::shared_ptr<Conf
 
     // Add files to file manager
     for (auto& filename : GetNecessaryFilenames(index_prefix_)) {
-        if (file_exists(filename) && !AddFile(filename)) {
+        if (pipeann::file_exists(filename) && !AddFile(filename)) {
             LOG_KNOWHERE_ERROR_ << "Failed to add file " << filename << ".";
             return Status::disk_file_error;
         }
     }
 
     for (auto& filename : GetOptionalFilenames(index_prefix_)) {
-        if (file_exists(filename) && !AddFile(filename)) {
+        if (pipeann::file_exists(filename) && !AddFile(filename)) {
             LOG_KNOWHERE_ERROR_ << "Failed to add optional file " << filename << ".";
             // Don't return error for optional files
         }
@@ -380,7 +380,7 @@ OdinANNIndexNode<DataType>::Build(const DataSetPtr dataset, std::shared_ptr<Conf
     }
 
     // If we need to build the mem_index and file doesn't exist, construct it
-    if (need_build && !file_exists(mem_index_path)) {
+    if (need_build && !pipeann::file_exists(mem_index_path)) {
         double sampling_rate = build_conf.sampling_rate.has_value() ? static_cast<float>(build_conf.sampling_rate.value()) : 0.01f;
         double mem_index_alpha = build_conf.mem_index_alpha.has_value() ? static_cast<float>(build_conf.mem_index_alpha.value()) : 1.2f;
 
@@ -425,11 +425,11 @@ OdinANNIndexNode<DataType>::Build(const DataSetPtr dataset, std::shared_ptr<Conf
             std::string sample_data_file = sample_prefix + "_data.bin";
             std::string sample_meta_file = sample_prefix + "_meta.bin";
             try {
-                if (file_exists(sample_data_file)) {
+                if (pipeann::file_exists(sample_data_file)) {
                     std::remove(sample_data_file.c_str());
                     LOG_KNOWHERE_INFO_ << "Removed sample file: " << sample_data_file;
                 }
-                if (file_exists(sample_meta_file)) {
+                if (pipeann::file_exists(sample_meta_file)) {
                     std::remove(sample_meta_file.c_str());
                     LOG_KNOWHERE_INFO_ << "Removed sample file: " << sample_meta_file;
                 }
@@ -458,7 +458,7 @@ OdinANNIndexNode<DataType>::Build(const DataSetPtr dataset, std::shared_ptr<Conf
     } else {
         // If mem_index file already exists (or another thread built it), ensure global pointer is loaded
         std::lock_guard<std::mutex> lock(g_mem_index_lock);
-        if (!mem_index_path.empty() && file_exists(mem_index_path) && g_global_mem_index == nullptr) {
+        if (!mem_index_path.empty() && pipeann::file_exists(mem_index_path) && g_global_mem_index == nullptr) {
             LOG_KNOWHERE_INFO_ << "Mem_index file already exists, loading into global pointer: " << mem_index_path;
             try {
                 auto mem_index_local = std::make_shared<pipeann::Index<DataType>>(metric, static_cast<size_t>(dim_.load()),
@@ -476,7 +476,7 @@ OdinANNIndexNode<DataType>::Build(const DataSetPtr dataset, std::shared_ptr<Conf
     }
 
     // Add memory index file to file manager if it exists
-    if (!mem_index_path.empty() && file_exists(mem_index_path)) {
+    if (!mem_index_path.empty() && pipeann::file_exists(mem_index_path)) {
         if (!AddFile(mem_index_path)) {
             LOG_KNOWHERE_WARNING_ << "Failed to add memory index file " << mem_index_path 
                                   << " to FileManager (not critical).";
@@ -562,7 +562,7 @@ OdinANNIndexNode<DataType>::Deserialize(const BinarySet& binset, std::shared_ptr
         // Load global memory index if available (single global instance, not per-instance)
         {
             std::lock_guard<std::mutex> lock(g_mem_index_lock);
-            if (!g_mem_index_path.empty() && file_exists(g_mem_index_path)) {
+            if (!g_mem_index_path.empty() && pipeann::file_exists(g_mem_index_path)) {
                 LOG_KNOWHERE_INFO_ << "Loading global memory index from: " << g_mem_index_path;
                 if (g_global_mem_index == nullptr) {
                     auto mem_index = std::make_shared<pipeann::Index<DataType>>(metric,
