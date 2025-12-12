@@ -6,6 +6,7 @@
 
 #include "utils.h"
 
+namespace pipeann {
 // sequential cached reads
 class cached_ifstream {
  public:
@@ -104,7 +105,7 @@ class cached_ofstream {
     open(filename, cache_size, initial_offset);
   }
   void open(const std::string &filename, uint64_t cache_size, size_t initial_offset = 0) {
-    open_file_to_write(writer, filename);
+    pipeann::open_file_to_write(writer, filename);
     assert(writer.is_open());
     assert(cache_size > 0);
     writer.seekp(initial_offset, writer.beg);
@@ -182,4 +183,5 @@ class cached_ofstream {
 
   // file size
   uint64_t fsize = 0;
+};
 };

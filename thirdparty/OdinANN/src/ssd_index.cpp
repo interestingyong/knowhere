@@ -37,7 +37,6 @@
 #include <cmath>
 #include "parameters.h"
 #include "query_buf.h"
-#include "timer.h"
 #include "utils.h"
 
 #include <unistd.h>

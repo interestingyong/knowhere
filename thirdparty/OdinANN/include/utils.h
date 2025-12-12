@@ -58,7 +58,8 @@ inline void crash() {
   // #endif
 }
 
-static inline bool file_exists(const std::string &name, bool dirCheck = false) {
+namespace pipeann {
+inline bool file_exists(const std::string &name, bool dirCheck = false) {
   int val;
   struct stat buffer;
   val = stat(name.c_str(), &buffer);
@@ -82,6 +83,7 @@ static inline bool file_exists(const std::string &name, bool dirCheck = false) {
     return dirCheck ? buffer.st_mode & S_IFDIR : true;
   }
 }
+
 
 inline void open_file_to_write(std::ofstream &writer, const std::string &filename) {
   writer.exceptions(std::ofstream::failbit | std::ofstream::badbit);
@@ -121,7 +123,6 @@ inline int delete_file(const std::string &fileName) {
   }
 }
 
-namespace pipeann {
   static const size_t MAX_SIZE_OF_STREAMBUF = 2LL * 1024 * 1024 * 1024;
 
   enum Metric { L2 = 0, INNER_PRODUCT = 1, FAST_L2 = 2, PQ = 3, COSINE = 4 };
