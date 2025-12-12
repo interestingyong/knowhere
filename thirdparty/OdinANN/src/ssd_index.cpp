@@ -1,6 +1,40 @@
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <cstdio>
+#include <ctime>
+#include <fstream>
+#include <iostream>
+#include <iterator>
+#include <queue>
+#include <random>
+#include <set>
+#include <sstream>
+#include <string>
+#include <bitset>
+#include <cassert>
+
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <time.h>
+
+#include "knowhere/comp/knowhere_config.h"
+
 #include "aligned_file_reader.h"
-#include "ssd_index.h"
-#include <malloc.h>
+#include "concurrent_queue.h"
+#include "index.h"
+#include "math_utils.h"
+#include "memory_mapper.h"
+#include "neighbor.h"
+#include "parameters.h"
+#include "percentile_stats.h"
+#include "pq_table.h"
+#include "timer.h"
+#include "utils.h"
+#include "cached_io.h"
+#include "v2/defs.h"
+#include "v2/pipe_buf.h"
+#include "v2/page_cache.h"
 
 #include <omp.h>
 #include <cmath>
@@ -352,4 +386,10 @@ namespace pipeann {
   template class SSDIndex<float>;
   template class SSDIndex<_s8>;
   template class SSDIndex<_u8>;
+  
+  // 添加针对knowhere特定类型的模板实例化
+#ifdef KNOWHERE_WITH_ODINANN
+  template class SSDIndex<knowhere::fp16>;
+  template class SSDIndex<knowhere::bf16>;
+#endif
 }  // namespace pipeann

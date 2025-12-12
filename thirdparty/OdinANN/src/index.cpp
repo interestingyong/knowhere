@@ -1872,4 +1872,5 @@ namespace pipeann {
   template class Index<float, uint32_t>;
   template class Index<int8_t, uint32_t>;
   template class Index<uint8_t, uint32_t>;
+  
 }  // namespace pipeann

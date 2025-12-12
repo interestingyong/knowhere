@@ -1,27 +1,28 @@
-#include <omp.h>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <ctime>
-#include <iostream>
-#include <string>
-#include <random>
 #include <fstream>
-#include <limits>
-
-#include "cached_io.h"
-#include "index.h"
-#include "utils.h"
-#include "math_utils.h"
+#include <iostream>
+#include <iterator>
+#include <random>
+#include <set>
+#include <sstream>
+#include <string>
 
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <time.h>
-#include <tsl/robin_map.h>
 
-#include <cassert>
+#include "tsl/robin_map.h"
+
+#include "cached_io.h"
+#include "math_utils.h"
 #include "partition_and_pq.h"
+#include "utils.h"
+#include "timer.h"
+#include "index.h"
 
 #define MAX_BLOCK_SIZE 16384  // 64MB for 1024-dim float vectors, 2MB for 128-dim uint8 vectors.
 
@@ -691,26 +692,23 @@ int shard_data_into_clusters(const std::string data_file, float *pivots, const s
 
 
 template<typename T>
-int partition_with_ram_budget(const std::string data_file, const double sampling_rate, double ram_budget,
-                              size_t graph_degree, const std::string prefix_path, size_t k_base) {
+int partition_with_ram_budget(const std::string data_file, double sampling_rate, double ram_budget, size_t graph_degree,
+                             const std::string partition_file, size_t &num_parts) {
   size_t train_dim;
   size_t num_train;
   float *train_data_float;
   size_t max_k_means_reps = 20;
 
-  int num_parts = 3;
   bool fit_in_ram = false;
 
   gen_random_slice<T>(data_file, sampling_rate, train_data_float, num_train, train_dim);
 
   float *pivot_data = nullptr;
 
-  std::string cur_file = std::string(prefix_path);
+  std::string cur_file = std::string(partition_file); // 修复变量名：prefix_path -> partition_file
   std::string output_file;
 
   // kmeans_partitioning on training data
-
-  //  cur_file = cur_file + "_kmeans_partitioning-" + std::to_string(num_parts);
   output_file = cur_file + "_centroids.bin";
 
   while (!fit_in_ram) {
@@ -729,12 +727,12 @@ int partition_with_ram_budget(const std::string data_file, const double sampling
 
     // now pivots are ready. need to stream base points and assign them to
     // closest clusters.
-
     std::vector<size_t> cluster_sizes;
-    estimate_cluster_sizes<T>(data_file, pivot_data, num_parts, train_dim, k_base, cluster_sizes);
+    estimate_cluster_sizes<T>(data_file, pivot_data, num_parts, train_dim, graph_degree, cluster_sizes);
 
     for (auto &p : cluster_sizes) {
-      double cur_shard_ram_estimate = estimate_ram_usage(p, train_dim, sizeof(T), graph_degree);
+      // 直接使用 pipeann 命名空间下的 estimate_ram_usage 函数
+      double cur_shard_ram_estimate = pipeann::estimate_ram_usage(p, train_dim, sizeof(T), graph_degree);
 
       if (cur_shard_ram_estimate > max_ram_usage)
         max_ram_usage = cur_shard_ram_estimate;
@@ -750,7 +748,7 @@ int partition_with_ram_budget(const std::string data_file, const double sampling
   LOG(INFO) << "Saving global k-center pivots";
   save_bin<float>(output_file.c_str(), pivot_data, (size_t) num_parts, train_dim);
 
-  shard_data_into_clusters<T>(data_file, pivot_data, num_parts, train_dim, k_base, prefix_path);
+  shard_data_into_clusters<T>(data_file, pivot_data, num_parts, train_dim, graph_degree, partition_file);
   delete[] pivot_data;
   delete[] train_data_float;
   return num_parts;
@@ -791,23 +789,21 @@ template void gen_random_slice<int8_t>(const int8_t *inputdata, size_t npts,
                                        size_t ndims, double p_val,
                                        float *&sampled_data,
                                        size_t &slice_size); 
-                                       
-
+template int partition_with_ram_budget<float>(const std::string data_file, const double sampling_rate,
+                                              double ram_budget, size_t graph_degree, const std::string partition_file,
+                                              size_t &num_parts);
+template int partition_with_ram_budget<int8_t>(const std::string data_file, const double sampling_rate,
+                                               double ram_budget, size_t graph_degree, const std::string partition_file,
+                                               size_t &num_parts);
+template int partition_with_ram_budget<uint8_t>(const std::string data_file, const double sampling_rate,
+                                                double ram_budget, size_t graph_degree, const std::string partition_file,
+                                                size_t &num_parts);
 } // namespace pipeann
 
 
 
 
 
-template int pipeann::partition_with_ram_budget<int8_t>(const std::string data_file, const double sampling_rate,
-                                               double ram_budget, size_t graph_degree, const std::string prefix_path,
-                                               size_t k_base);
-template int pipeann::partition_with_ram_budget<uint8_t>(const std::string data_file, const double sampling_rate,
-                                                double ram_budget, size_t graph_degree, const std::string prefix_path,
-                                                size_t k_base);
-template int pipeann::partition_with_ram_budget<float>(const std::string data_file, const double sampling_rate,
-                                              double ram_budget, size_t graph_degree, const std::string prefix_path,
-                                              size_t k_base);
 
 template int pipeann::generate_pq_pivots<float>(const std::unique_ptr<float[]> &passed_train_data, size_t num_train,
                                        unsigned dim, unsigned num_centers, unsigned num_pq_chunks,

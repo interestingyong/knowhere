@@ -475,4 +475,30 @@ namespace pipeann {
     return result;
   }
 #endif  // USE_AVX512
+
+template<typename T>
+Distance<T> *get_distance_function(Metric m) {
+  if (m == Metric::L2) {
+    if constexpr (std::is_same_v<T, float>) {
+      return new DistanceL2;
+    } else if constexpr (std::is_same_v<T, int8_t>) {
+      return new DistanceL2Int8;
+    } else if constexpr (std::is_same_v<T, uint8_t>) {
+      return new DistanceL2UInt8;
+    } else {
+      // For other types, fallback to generic L2 implementation
+      LOG(ERROR) << "Unsupported type for L2 distance";
+      return nullptr;
+    }
+  } else {
+    LOG(ERROR) << "Only L2 supported for now.";
+    return nullptr;
+  }
+}
+
+// 显式实例化Distance函数模板
+template Distance<float> *get_distance_function<float>(Metric m);
+template Distance<int8_t> *get_distance_function<int8_t>(Metric m);
+template Distance<uint8_t> *get_distance_function<uint8_t>(Metric m);
+
 }  // namespace pipeann
