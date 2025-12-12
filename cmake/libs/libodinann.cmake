@@ -33,10 +33,12 @@ set(ODINANN_SOURCES
     thirdparty/OdinANN/src/utils/partition_and_pq.cpp
     thirdparty/OdinANN/src/search/beam_search.cpp
     thirdparty/OdinANN/src/search/pipe_search.cpp
+    thirdparty/OdinANN/src/ssd_index.cpp
+    thirdparty/OdinANN/src/utils/utils.cpp
 )
 
 # Create OdinANN static library
-add_library(odinann SHARED ${ODINANN_SOURCES})
+add_library(odinann STATIC ${ODINANN_SOURCES})
 
 # Set compile options for OdinANN
 target_compile_options(
@@ -46,12 +48,10 @@ target_compile_options(
     -Wall
     -Wextra
     -Wfatal-errors
-    -Wno-class-memaccess
-    -Wno-unused-variable
-    -Wno-unused-parameter
-    -Wno-unused-but-set-variable
-    -g -O3 -march=native -mtune=native -ftree-vectorize -funroll-loops
+    -g -O3
 )
+
+set_property(TARGET odinann PROPERTY POSITION_INDEPENDENT_CODE ON)
 
 # Link required libraries
 find_library(LIBURING_LIBRARY NAMES uring PATHS ${LIBURING_INSTALL_DIR}/lib NO_DEFAULT_PATH)
@@ -59,10 +59,16 @@ if(NOT LIBURING_LIBRARY)
     message(FATAL_ERROR "liburing library not found in ${LIBURING_INSTALL_DIR}/lib")
 endif()
 
+find_package(folly REQUIRED)
+
+
 target_link_libraries(
     odinann
     PUBLIC OpenMP::OpenMP_CXX
     PUBLIC ${LIBURING_LIBRARY}
+    Folly::folly
+    fmt::fmt-header-only
+    glog::glog
 )
 
 # Add to knowhere linker libs

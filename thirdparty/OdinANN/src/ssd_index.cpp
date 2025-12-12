@@ -24,7 +24,6 @@
 #include "concurrent_queue.h"
 #include "index.h"
 #include "math_utils.h"
-#include "memory_mapper.h"
 #include "neighbor.h"
 #include "parameters.h"
 #include "percentile_stats.h"
@@ -32,8 +31,6 @@
 #include "timer.h"
 #include "utils.h"
 #include "cached_io.h"
-#include "v2/defs.h"
-#include "v2/pipe_buf.h"
 #include "v2/page_cache.h"
 
 #include <omp.h>
