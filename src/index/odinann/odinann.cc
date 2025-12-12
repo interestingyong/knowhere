@@ -38,6 +38,7 @@
 #include "index.h"
 #include "linux_aligned_file_reader.h"
 #include "ssd_index.h"
+#include "partition_and_pq.h"
 
 
 namespace knowhere {
@@ -380,8 +381,8 @@ OdinANNIndexNode<DataType>::Build(const DataSetPtr dataset, std::shared_ptr<Conf
 
     // If we need to build the mem_index and file doesn't exist, construct it
     if (need_build && !file_exists(mem_index_path)) {
-        float sampling_rate = build_conf.sampling_rate.has_value() ? static_cast<float>(build_conf.sampling_rate.value()) : 0.01f;
-        float mem_index_alpha = build_conf.mem_index_alpha.has_value() ? static_cast<float>(build_conf.mem_index_alpha.value()) : 1.2f;
+        double sampling_rate = build_conf.sampling_rate.has_value() ? static_cast<float>(build_conf.sampling_rate.value()) : 0.01f;
+        double mem_index_alpha = build_conf.mem_index_alpha.has_value() ? static_cast<float>(build_conf.mem_index_alpha.value()) : 1.2f;
 
         LOG_KNOWHERE_INFO_ << "=== Building global memory index ===";
         LOG_KNOWHERE_INFO_ << "Target mem_index path: " << mem_index_path;

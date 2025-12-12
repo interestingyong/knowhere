@@ -26,7 +26,7 @@
 #define MAX_BLOCK_SIZE 16384  // 64MB for 1024-dim float vectors, 2MB for 128-dim uint8 vectors.
 
 namespace pipeann {
-
+  
 template<typename T>
 void gen_random_slice(const std::string base_file, const std::string output_prefix, double sampling_rate,
                       size_t offset) {
@@ -755,8 +755,8 @@ int partition_with_ram_budget(const std::string data_file, const double sampling
   delete[] train_data_float;
   return num_parts;
 }
-/*
-// 1. 重载1（3个参数）：对应图片中的调用
+
+
 template void gen_random_slice<int8_t>(const std::string base_file, 
                                        const std::string output_prefix,
                                        double sampling_rate, size_t offset);
@@ -767,45 +767,37 @@ template void gen_random_slice<float>(const std::string base_file,
                                       const std::string output_prefix,
                                       double sampling_rate, size_t offset);
 
-// 2. 重载3（5个参数，返回float*）：对应图片中的调用
-template void gen_random_slice<float>(const std::string data_file, 
-                                      double p_val, float *&sampled_data,
+// gen_random_slice overloads for (data_file, p_val, float *&, slice_size, ndims)
+template void gen_random_slice<float>(const std::string data_file, double p_val,
+                                      float *&sampled_data,
                                       size_t &slice_size, size_t &ndims);
-template void gen_random_slice<uint8_t>(const std::string data_file, 
-                                        double p_val, float *&sampled_data,
+template void gen_random_slice<uint8_t>(const std::string data_file, double p_val,
+                                        float *&sampled_data,
                                         size_t &slice_size, size_t &ndims);
-template void gen_random_slice<int8_t>(const std::string data_file, 
-                                       double p_val, float *&sampled_data,
-                                       size_t &slice_size, size_t &ndims); */
+template void gen_random_slice<int8_t>(const std::string data_file, double p_val,
+                                       float *&sampled_data,
+                                       size_t &slice_size, size_t &ndims);
+
+// gen_random_slice overloads for (inputdata, npts, ndims, p_val, sampled_data, slice_size)
+template void gen_random_slice<float>(const float *inputdata, size_t npts,
+                                      size_t ndims, double p_val,
+                                      float *&sampled_data,
+                                      size_t &slice_size);
+template void gen_random_slice<uint8_t>(const uint8_t *inputdata, size_t npts,
+                                        size_t ndims, double p_val,
+                                        float *&sampled_data,
+                                        size_t &slice_size);
+template void gen_random_slice<int8_t>(const int8_t *inputdata, size_t npts,
+                                       size_t ndims, double p_val,
+                                       float *&sampled_data,
+                                       size_t &slice_size); 
+                                       
 
 } // namespace pipeann
 
 
 
-// 只实例化实际被调用的重载
 
-
-// 1. 重载1（3个参数）：对应图片中的调用
-template void pipeann::gen_random_slice<int8_t>(const std::string base_file, 
-                                       const std::string output_prefix,
-                                       double sampling_rate, size_t offset);
-template void pipeann::gen_random_slice<uint8_t>(const std::string base_file, 
-                                        const std::string output_prefix,
-                                        double sampling_rate, size_t offset);
-template void pipeann::gen_random_slice<float>(const std::string base_file, 
-                                      const std::string output_prefix,
-                                      double sampling_rate, size_t offset);
-
-// 2. 重载3（5个参数，返回float*）：对应图片中的调用
-template void pipeann::gen_random_slice<float>(const std::string data_file, 
-                                      double p_val, float *&sampled_data,
-                                      size_t &slice_size, size_t &ndims);
-template void pipeann::gen_random_slice<uint8_t>(const std::string data_file, 
-                                        double p_val, float *&sampled_data,
-                                        size_t &slice_size, size_t &ndims);
-template void pipeann::gen_random_slice<int8_t>(const std::string data_file, 
-                                       double p_val, float *&sampled_data,
-                                       size_t &slice_size, size_t &ndims); 
 
 template int pipeann::partition_with_ram_budget<int8_t>(const std::string data_file, const double sampling_rate,
                                                double ram_budget, size_t graph_degree, const std::string prefix_path,
