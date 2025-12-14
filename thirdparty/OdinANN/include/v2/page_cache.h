@@ -27,7 +27,7 @@ namespace v2 {
   struct PageCache {
     bool get(uint64_t block_no, uint8_t *value, bool ref = false) {
       bool ret = cache.update_fn(block_no, [&](PageCacheItem &v) {
-        memcpy(value, v.buf, SECTOR_LEN);
+        memcpy(value, v.buf, SECTOR_LEN_ODIN);
         if (ref) {
           v.ref();
         }
@@ -38,12 +38,12 @@ namespace v2 {
     bool put(uint64_t block_no, uint8_t *value, bool ref = false) {
       return cache.upsert(block_no, [&](PageCacheItem &v, libcuckoo::UpsertContext ctx) {
         if (ctx == libcuckoo::UpsertContext::NEWLY_INSERTED) {
-          v = PageCacheItem{.buf = new uint8_t[SECTOR_LEN], .ref_cnt = 0};
+          v = PageCacheItem{.buf = new uint8_t[SECTOR_LEN_ODIN], .ref_cnt = 0};
         }
         if (ref) {
           v.ref();
         }
-        memcpy(v.buf, value, SECTOR_LEN);
+        memcpy(v.buf, value, SECTOR_LEN_ODIN);
       });
     }
 

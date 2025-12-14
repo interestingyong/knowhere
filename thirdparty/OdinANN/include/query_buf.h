@@ -3,7 +3,7 @@
 #include "utils.h"
 #include "tsl/robin_set.h"
 
-#define MAX_N_SECTOR_READS 512
+#define MAX_N_SECTOR_READS_ODIN 512
 // Both unaligned and aligned.
 // example: a record locates in [300, 500], then
 // offset = 0, len = 4096 (aligned read for disk)
@@ -48,8 +48,8 @@ namespace pipeann {
     T *coord_scratch = nullptr;  // MUST BE AT LEAST [MAX_N_CMPS * data_dim], for vectors visited.
     _u64 coord_idx = 0;          // index of next [data_dim] scratch to use
 
-    char *sector_scratch = nullptr;  // MUST BE AT LEAST [MAX_N_SECTOR_READS * SECTOR_LEN], for sectors.
-    _u64 sector_idx = 0;             // index of next [SECTOR_LEN] scratch to use
+    char *sector_scratch = nullptr;  // MUST BE AT LEAST [MAX_N_SECTOR_READS * SECTOR_LEN_ODIN], for sectors.
+    _u64 sector_idx = 0;             // index of next [SECTOR_LEN_ODIN] scratch to use
 
     float *aligned_pqtable_dist_scratch = nullptr;  // MUST BE AT LEAST [256 * NCHUNKS], for pq table distance.
     float *aligned_dist_scratch = nullptr;          // MUST BE AT LEAST pipeann MAX_DEGREE, for exact dist.
@@ -59,7 +59,7 @@ namespace pipeann {
 
     tsl::robin_set<_u64> *visited = nullptr;
     tsl::robin_set<unsigned> *page_visited = nullptr;
-    IORequest reqs[MAX_N_SECTOR_READS];
+    IORequest reqs[MAX_N_SECTOR_READS_ODIN];
 
     void reset() {
       coord_idx = 0;

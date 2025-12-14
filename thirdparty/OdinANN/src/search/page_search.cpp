@@ -106,8 +106,8 @@ namespace pipeann {
     QueryBuffer<T> *query_buf = pop_query_buf(query1);
     void *ctx = reader->get_ctx();
 
-    if (beam_width > MAX_N_SECTOR_READS) {
-      LOG(ERROR) << "Beamwidth can not be higher than MAX_N_SECTOR_READS";
+    if (beam_width > MAX_N_SECTOR_READS_ODIN) {
+      LOG(ERROR) << "Beamwidth can not be higher than MAX_N_SECTOR_READS_ODIN";
       crash();
     }
     const T *query = query_buf->aligned_query_T;
@@ -233,7 +233,7 @@ namespace pipeann {
     std::vector<io_ss_t> last_io_snapshot;
     last_io_snapshot.reserve(2 * beam_width);
 
-    std::vector<char> last_pages(SECTOR_LEN * beam_width * 2);
+    std::vector<char> last_pages(SECTOR_LEN_ODIN * beam_width * 2);
 
     // search on disk.
     while (k < cur_list_size) {
@@ -285,7 +285,7 @@ namespace pipeann {
           frontier_nhoods.push_back(fnhood);
           // read the page to the temporary buffer
           frontier_read_reqs.emplace_back(
-              IORequest(page_id * SECTOR_LEN, size_per_io, buf, page_id * SECTOR_LEN, size_per_io));
+              IORequest(page_id * SECTOR_LEN_ODIN, size_per_io, buf, page_id * SECTOR_LEN_ODIN, size_per_io));
           if (stats != nullptr) {
             stats->n_4k++;
             stats->n_ios++;
@@ -301,7 +301,7 @@ namespace pipeann {
       auto cpu1_st = std::chrono::high_resolution_clock::now();
       for (size_t i = 0; i < last_io_snapshot.size(); ++i) {
         auto &[last_io_id, pid, page_layout] = last_io_snapshot[i];
-        char *sector_buf = last_pages.data() + i * SECTOR_LEN;
+        char *sector_buf = last_pages.data() + i * SECTOR_LEN_ODIN;
 
         // minus one for the vector that is computed previously
         std::vector<std::pair<float, const char *>> vis_cand;
@@ -347,7 +347,7 @@ namespace pipeann {
       // postpone remaining vectors to the next round
       for (auto &[id, pid, layout, sector_buf] : frontier_nhoods) {
         // fill in the last_io_ids() and last_pages() with neighbor buffers.
-        memcpy(last_pages.data() + last_io_snapshot.size() * SECTOR_LEN, sector_buf, SECTOR_LEN);
+        memcpy(last_pages.data() + last_io_snapshot.size() * SECTOR_LEN_ODIN, sector_buf, SECTOR_LEN_ODIN);
         last_io_snapshot.emplace_back(std::make_tuple(id, pid, layout));
 
         for (unsigned j = 0; j < nnodes_per_sector; ++j) {

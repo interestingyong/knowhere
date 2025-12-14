@@ -143,7 +143,7 @@ namespace pipeann {
         for (_u64 i = 0; i < frontier.size(); i++) {
           uint32_t id = frontier[i];
           uint32_t loc = this->id2loc(id);
-          uint64_t offset = loc_sector_no(loc) * SECTOR_LEN;
+          uint64_t offset = loc_sector_no(loc) * SECTOR_LEN_ODIN;
           auto sector_buf = sector_scratch + sector_scratch_idx * size_per_io;
           fnhood_t fnhood = std::make_tuple(id, loc, sector_buf);
           sector_scratch_idx++;
@@ -174,7 +174,7 @@ namespace pipeann {
         unsigned *node_buf = offset_to_node_nhood(node_disk_buf);
         _u64 nnbrs = (_u64) (*node_buf);
         T *node_fp_coords = offset_to_node_coords(node_disk_buf);
-        assert(data_buf_idx < MAX_N_CMPS);
+        assert(data_buf_idx < MAX_N_CMPS_ODIN);
 
         T *node_fp_coords_copy = data_buf + (data_buf_idx * aligned_dim);
         data_buf_idx++;

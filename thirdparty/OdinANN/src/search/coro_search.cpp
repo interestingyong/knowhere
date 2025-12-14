@@ -28,9 +28,9 @@ namespace pipeann {
     // beam search with intra-thread parallelism.
     static constexpr int kMaxCoroPerThread = 8;
     static constexpr int kMaxVectorDim = 512;
-    struct alignas(SECTOR_LEN) CoroDataOne {
+    struct alignas(SECTOR_LEN_ODIN) CoroDataOne {
       // buffer.
-      char sectors[SECTOR_LEN * 128];
+      char sectors[SECTOR_LEN_ODIN * 128];
       T query[kMaxVectorDim];
       _u8 pq_coord_scratch[32768 * 32];
       float pq_dists[32768];
@@ -112,7 +112,7 @@ namespace pipeann {
         if (!frontier.empty()) {
           for (_u64 i = 0; i < frontier.size(); i++) {
             uint32_t loc = frontier[i];
-            uint64_t offset = parent->loc_sector_no(loc) * SECTOR_LEN;
+            uint64_t offset = parent->loc_sector_no(loc) * SECTOR_LEN_ODIN;
             auto sector_buf = sectors + sector_idx * parent->size_per_io;
             fnhood_t fnhood = std::make_tuple(loc, loc, sector_buf);
             sector_idx++;

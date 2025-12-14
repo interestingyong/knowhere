@@ -241,7 +241,7 @@ namespace pipeann {
       LOG(INFO) << ", max node degree: " << max_degree;
     }
 
-    size_per_io = SECTOR_LEN * (nnodes_per_sector > 0 ? 1 : DIV_ROUND_UP(max_node_len, SECTOR_LEN));
+    size_per_io = SECTOR_LEN_ODIN * (nnodes_per_sector > 0 ? 1 : DIV_ROUND_UP(max_node_len, SECTOR_LEN_ODIN));
     LOG(INFO) << "Size per IO: " << size_per_io;
 
     index_metadata.close();
@@ -373,7 +373,7 @@ namespace pipeann {
     size_t num_sectors = node_sector_no(pos);
     std::ifstream disk_reader(_disk_index_file.c_str(), std::ios::binary);
     std::unique_ptr<char[]> sector_buf = std::make_unique<char[]>(size_per_io);
-    disk_reader.seekg(SECTOR_LEN * num_sectors, std::ios::beg);
+    disk_reader.seekg(SECTOR_LEN_ODIN * num_sectors, std::ios::beg);
     disk_reader.read(sector_buf.get(), size_per_io);
     char *node_coords = (offset_to_node(sector_buf.get(), pos));
     memcpy((void *) vector_coords, (void *) node_coords, data_dim * sizeof(T));

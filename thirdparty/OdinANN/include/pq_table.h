@@ -7,10 +7,11 @@
 #include <sstream>
 #include <string_view>
 
-#define NUM_PQ_CENTROIDS 256
-#define NUM_PQ_OFFSETS 5
+
 
 namespace pipeann {
+#define NUM_PQ_CENTROIDS_ODIN 256
+#define NUM_PQ_OFFSETS_ODIN 5
   template<typename T>
   class FixedChunkPQTable {
     // data_dim = n_chunks * chunk_size;
@@ -27,7 +28,7 @@ namespace pipeann {
 
    public:
     uint64_t all_to_all_dist_size() {
-      return sizeof(float) * n_chunks * NUM_PQ_CENTROIDS * NUM_PQ_CENTROIDS;
+      return sizeof(float) * n_chunks * NUM_PQ_CENTROIDS_ODIN * NUM_PQ_CENTROIDS_ODIN;
     }
 
     FixedChunkPQTable() {
@@ -59,15 +60,15 @@ namespace pipeann {
       pipeann::load_bin_impl<_u64>(reader, file_offset_data_raw, nr, nc, offset);
       file_offset_data.reset(file_offset_data_raw);
 
-      if (nr != NUM_PQ_OFFSETS) {
-        LOG(ERROR) << "Pivot offset incorrect, # offsets = " << nr << ", but expecting " << NUM_PQ_OFFSETS;
+      if (nr != NUM_PQ_OFFSETS_ODIN) {
+        LOG(ERROR) << "Pivot offset incorrect, # offsets = " << nr << ", but expecting " << NUM_PQ_OFFSETS_ODIN;
         crash();
       }
 
       pipeann::load_bin_impl<float>(reader, tables, nr, nc, file_offset_data[0] + offset);
 
-      if ((nr != NUM_PQ_CENTROIDS)) {
-        LOG(ERROR) << "Num centers incorrect, centers = " << nr << " but expecting " << NUM_PQ_CENTROIDS;
+      if ((nr != NUM_PQ_CENTROIDS_ODIN)) {
+        LOG(ERROR) << "Num centers incorrect, centers = " << nr << " but expecting " << NUM_PQ_CENTROIDS_ODIN;
         crash();
       }
 
@@ -93,7 +94,7 @@ namespace pipeann {
       }
 
       this->n_chunks = num_chunks;
-      LOG(INFO) << "Loaded PQ Pivots: #ctrs: " << NUM_PQ_CENTROIDS << ", #dims: " << this->ndims
+      LOG(INFO) << "Loaded PQ Pivots: #ctrs: " << NUM_PQ_CENTROIDS_ODIN << ", #dims: " << this->ndims
                 << ", #chunks: " << this->n_chunks;
     }
 

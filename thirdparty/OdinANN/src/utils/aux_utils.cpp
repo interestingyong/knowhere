@@ -96,7 +96,7 @@ namespace pipeann {
     LOG(INFO) << "Calculated num_pq_chunks :" << num_pq_chunks;
     num_pq_chunks = num_pq_chunks <= 0 ? 1 : num_pq_chunks;
     num_pq_chunks = num_pq_chunks > dim ? dim : num_pq_chunks;
-    num_pq_chunks = num_pq_chunks > MAX_PQ_CHUNKS ? MAX_PQ_CHUNKS : num_pq_chunks;
+    num_pq_chunks = num_pq_chunks > MAX_PQ_CHUNKS_ODIN ? MAX_PQ_CHUNKS_ODIN : num_pq_chunks;
 
     LOG(INFO) << "Compressing " << dim << "-dimensional data into " << num_pq_chunks << " bytes per vector.";
     return num_pq_chunks;
@@ -502,23 +502,23 @@ namespace pipeann {
     if (vamana_frozen_num == 1)
       vamana_frozen_loc = medoid;
     max_node_len = (((_u64) width_u32 + 1) * sizeof(unsigned)) + (ndims_64 * sizeof(T));
-    nnodes_per_sector = SECTOR_LEN / max_node_len;  // 0 if max_node_len > SECTOR_LEN
+    nnodes_per_sector = SECTOR_LEN_ODIN / max_node_len;  // 0 if max_node_len > SECTOR_LEN
 
     LOG(INFO) << "medoid: " << medoid << "B";
     LOG(INFO) << "max_node_len: " << max_node_len << "B";
     LOG(INFO) << "nnodes_per_sector: " << nnodes_per_sector << "B";
 
     // SECTOR_LEN buffer for each sector
-    std::unique_ptr<char[]> sector_buf = std::make_unique<char[]>(SECTOR_LEN);
-    std::unique_ptr<char[]> multisector_buf = std::make_unique<char[]>(ROUND_UP(max_node_len, SECTOR_LEN));
+    std::unique_ptr<char[]> sector_buf = std::make_unique<char[]>(SECTOR_LEN_ODIN);
+    std::unique_ptr<char[]> multisector_buf = std::make_unique<char[]>(ROUND_UP(max_node_len, SECTOR_LEN_ODIN));
     std::unique_ptr<char[]> node_buf = std::make_unique<char[]>(max_node_len);
     unsigned &nnbrs = *(unsigned *) (node_buf.get() + ndims_64 * sizeof(T));
     unsigned *nhood_buf = (unsigned *) (node_buf.get() + (ndims_64 * sizeof(T)) + sizeof(unsigned));
 
     // number of sectors (1 for meta data)
     _u64 n_sectors = nnodes_per_sector > 0 ? ROUND_UP(npts_64, nnodes_per_sector) / nnodes_per_sector
-                                           : npts_64 * DIV_ROUND_UP(max_node_len, SECTOR_LEN);
-    _u64 disk_index_file_size = (n_sectors + 1) * SECTOR_LEN;
+                                           : npts_64 * DIV_ROUND_UP(max_node_len, SECTOR_LEN_ODIN);
+    _u64 disk_index_file_size = (n_sectors + 1) * SECTOR_LEN_ODIN;
 
     std::vector<_u64> output_file_meta;
     output_file_meta.push_back(npts_64);
@@ -530,7 +530,7 @@ namespace pipeann {
     output_file_meta.push_back(vamana_frozen_loc);
     output_file_meta.push_back(disk_index_file_size);
 
-    diskann_writer.write(sector_buf.get(), SECTOR_LEN);  // write out the empty
+    diskann_writer.write(sector_buf.get(), SECTOR_LEN_ODIN);  // write out the empty
                                                          // first sector, will
                                                          // be populated at the
                                                          // end.
@@ -544,7 +544,7 @@ namespace pipeann {
         if (sector % 100000 == 0) {
           LOG(INFO) << "Sector #" << sector << "written";
         }
-        memset(sector_buf.get(), 0, SECTOR_LEN);
+        memset(sector_buf.get(), 0, SECTOR_LEN_ODIN);
         for (_u64 sector_node_id = 0; sector_node_id < nnodes_per_sector && cur_node_id < npts_64; sector_node_id++) {
           memset(node_buf.get(), 0, max_node_len);
           // read cur node's nnbrs
@@ -582,15 +582,15 @@ namespace pipeann {
           cur_node_id++;
         }
         // flush sector to disk
-        diskann_writer.write(sector_buf.get(), SECTOR_LEN);
+        diskann_writer.write(sector_buf.get(), SECTOR_LEN_ODIN);
       }
     } else {
-      uint64_t nsectors_per_node = DIV_ROUND_UP(max_node_len, SECTOR_LEN);
+      uint64_t nsectors_per_node = DIV_ROUND_UP(max_node_len, SECTOR_LEN_ODIN);
       for (uint64_t i = 0; i < npts_64; i++) {
         if ((i * nsectors_per_node) % 100000 == 0) {
           LOG(INFO) << "Sector #" << i * nsectors_per_node << "written";
         }
-        memset(multisector_buf.get(), 0, nsectors_per_node * SECTOR_LEN);
+        memset(multisector_buf.get(), 0, nsectors_per_node * SECTOR_LEN_ODIN);
 
         memset(node_buf.get(), 0, max_node_len);
         // read cur node's nnbrs
@@ -615,7 +615,7 @@ namespace pipeann {
                (std::min)(nnbrs, width_u32) * sizeof(uint32_t));
 
         // flush sector to disk
-        diskann_writer.write(multisector_buf.get(), nsectors_per_node * SECTOR_LEN);
+        diskann_writer.write(multisector_buf.get(), nsectors_per_node * SECTOR_LEN_ODIN);
       }
     }
 

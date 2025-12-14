@@ -45,8 +45,8 @@ namespace pipeann {
     Timer delete_timer;
 
     char *rbuf = nullptr, *wbuf = nullptr;
-    alloc_aligned((void **) &rbuf, SECTORS_PER_MERGE * SECTOR_LEN, SECTOR_LEN);
-    alloc_aligned((void **) &wbuf, 2 * SECTORS_PER_MERGE * SECTOR_LEN, SECTOR_LEN);  // sliding window buffer.
+    alloc_aligned((void **) &rbuf, SECTORS_PER_MERGE * SECTOR_LEN_ODIN, SECTOR_LEN_ODIN);
+    alloc_aligned((void **) &wbuf, 2 * SECTORS_PER_MERGE * SECTOR_LEN_ODIN, SECTOR_LEN_ODIN);  // sliding window buffer.
     uint64_t n_sectors = (cur_loc + nnodes_per_sector - 1) / nnodes_per_sector;
     LOG(INFO) << "Cur loc: " << cur_loc.load() << ", cur ID: " << cur_id << ", n_sectors: " << n_sectors
               << ", nnodes_per_sector: " << nnodes_per_sector;
@@ -59,7 +59,7 @@ namespace pipeann {
       uint64_t loc_st = st_sector * nnodes_per_sector, loc_ed = std::min(cur_loc.load(), ed_sector * nnodes_per_sector);
       uint64_t n_sectors_to_read = ed_sector - st_sector;
       std::vector<IORequest> read_reqs;
-      read_reqs.push_back(IORequest(loc_sector_no(loc_st) * SECTOR_LEN, n_sectors_to_read * size_per_io, rbuf, 0, 0));
+      read_reqs.push_back(IORequest(loc_sector_no(loc_st) * SECTOR_LEN_ODIN, n_sectors_to_read * size_per_io, rbuf, 0, 0));
       reader->read(read_reqs, ctx, false);
 
 #pragma omp parallel for num_threads(populate_nthreads)
@@ -79,7 +79,7 @@ namespace pipeann {
         }
 
         // 3. deleted, populate nhoods.
-        auto page_rbuf = rbuf + (loc / nnodes_per_sector - st_sector) * SECTOR_LEN;
+        auto page_rbuf = rbuf + (loc / nnodes_per_sector - st_sector) * SECTOR_LEN_ODIN;
         auto node_rbuf = offset_to_loc(page_rbuf, loc);
         DiskNode<T> node(id, offset_to_node_coords(node_rbuf), offset_to_node_nhood(node_rbuf));
         std::vector<uint32_t> nhood;
@@ -108,10 +108,10 @@ namespace pipeann {
     auto write_back = [&]() {
       // write one buffer.
       uint64_t buf_id = (wb_id % kVecInWBuf) / (nnodes_per_sector * SECTORS_PER_MERGE);
-      auto b = wbuf + buf_id * SECTORS_PER_MERGE * SECTOR_LEN;
+      auto b = wbuf + buf_id * SECTORS_PER_MERGE * SECTOR_LEN_ODIN;
       std::vector<IORequest> write_reqs;
       uint64_t id_delta = std::min((uint64_t) SECTORS_PER_MERGE * nnodes_per_sector, n_used_id - wb_id);
-      write_reqs.push_back(IORequest(loc_sector_no(wb_id) * SECTOR_LEN,
+      write_reqs.push_back(IORequest(loc_sector_no(wb_id) * SECTOR_LEN_ODIN,
                                      ROUND_UP(id_delta, nnodes_per_sector) / nnodes_per_sector * size_per_io, b, 0, 0));
       reader->write_fd(fd, write_reqs, ctx);
       wb_id += id_delta;
@@ -126,7 +126,7 @@ namespace pipeann {
       uint64_t loc_st = st_sector * nnodes_per_sector, loc_ed = std::min(cur_loc.load(), ed_sector * nnodes_per_sector);
       uint64_t n_sectors_to_read = ed_sector - st_sector;
       std::vector<IORequest> read_reqs;
-      read_reqs.push_back(IORequest(loc_sector_no(loc_st) * SECTOR_LEN, n_sectors_to_read * size_per_io, rbuf, 0, 0));
+      read_reqs.push_back(IORequest(loc_sector_no(loc_st) * SECTOR_LEN_ODIN, n_sectors_to_read * size_per_io, rbuf, 0, 0));
       reader->read(read_reqs, ctx, false);  // read in fd
 
 #pragma omp parallel for num_threads(nthreads)
@@ -141,7 +141,7 @@ namespace pipeann {
           continue;
         }
 
-        auto page_rbuf = rbuf + (loc / nnodes_per_sector - st_sector) * SECTOR_LEN;
+        auto page_rbuf = rbuf + (loc / nnodes_per_sector - st_sector) * SECTOR_LEN_ODIN;
         auto loc_rbuf = offset_to_loc(page_rbuf, loc);
         DiskNode<T> node(id, offset_to_node_coords(loc_rbuf), offset_to_node_nhood(loc_rbuf));
         // prune neighbors.
@@ -186,7 +186,7 @@ namespace pipeann {
         // write neighbors.
         uint64_t new_id = id_map.find(id);
         uint64_t off = new_id % kVecInWBuf;
-        auto page_wbuf = wbuf + (off / nnodes_per_sector) * SECTOR_LEN;
+        auto page_wbuf = wbuf + (off / nnodes_per_sector) * SECTOR_LEN_ODIN;
         auto loc_wbuf = offset_to_loc(page_wbuf, off);
         DiskNode<T> w_node(new_id, offset_to_node_coords(loc_wbuf), offset_to_node_nhood(loc_wbuf));
         memcpy(w_node.coords, node.coords, data_dim * sizeof(T));
@@ -249,7 +249,7 @@ namespace pipeann {
   void SSDIndex<T, TagT>::write_metadata_and_pq(const std::string &in_path_prefix, const std::string &out_path_prefix,
                                                 const uint64_t &new_npoints, const uint64_t &new_medoid,
                                                 std::vector<TagT> *new_tags) {
-    uint64_t file_size = SECTOR_LEN + ROUND_UP(new_npoints, nnodes_per_sector) / nnodes_per_sector * SECTOR_LEN;
+    uint64_t file_size = SECTOR_LEN_ODIN + ROUND_UP(new_npoints, nnodes_per_sector) / nnodes_per_sector * SECTOR_LEN_ODIN;
     std::vector<uint64_t> output_metadata;
     output_metadata.push_back(new_npoints);
     output_metadata.push_back((uint64_t) this->data_dim);

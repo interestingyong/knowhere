@@ -494,7 +494,7 @@ void LinuxAlignedFileReader::poll_wait(void *ctx) {
 
 int LinuxAlignedFileReader::send_read_no_alloc(IORequest &req, void *ring) {
 #ifndef READ_ONLY_TESTS
-  if (!v2::cache.get(req.offset / SECTOR_LEN, (uint8_t *) req.buf)) {
+  if (!v2::cache.get(req.offset / SECTOR_LEN_ODIN, (uint8_t *) req.buf)) {
     send_io(req, ring, false);
   } else {
     req.finished = true;  // mark as finished for cache miss
@@ -510,10 +510,10 @@ int LinuxAlignedFileReader::send_read_no_alloc(std::vector<IORequest> &reqs, voi
   std::vector<IORequest> disk_read_reqs;
   // fetch from cache.
   for (auto &req : reqs) {
-    if (req.offset % SECTOR_LEN != 0 || req.len != SECTOR_LEN) {
+    if (req.offset % SECTOR_LEN_ODIN != 0 || req.len != SECTOR_LEN_ODIN) {
       LOG(ERROR) << "Unaligned read offset: " << req.offset << ", len: " << req.len;
     }
-    if (!v2::cache.get(req.offset / SECTOR_LEN, (uint8_t *) req.buf)) {
+    if (!v2::cache.get(req.offset / SECTOR_LEN_ODIN, (uint8_t *) req.buf)) {
       disk_read_reqs.push_back(req);
     }
   }
@@ -531,11 +531,11 @@ void LinuxAlignedFileReader::read_alloc(std::vector<IORequest> &read_reqs, void 
 
   // TODO(gh): introduce size_per_io to cache.
   for (auto &req : read_reqs) {
-    if (req.offset % SECTOR_LEN != 0) {
+    if (req.offset % SECTOR_LEN_ODIN != 0) {
       LOG(ERROR) << "Unaligned read offset: " << req.offset << ", len: " << req.len;
       crash();
     }
-    if (!v2::cache.get(req.offset / SECTOR_LEN, (uint8_t *) req.buf, true)) {
+    if (!v2::cache.get(req.offset / SECTOR_LEN_ODIN, (uint8_t *) req.buf, true)) {
       disk_read_reqs.push_back(req);
     }
   }
@@ -543,14 +543,14 @@ void LinuxAlignedFileReader::read_alloc(std::vector<IORequest> &read_reqs, void 
   if (disk_read_reqs.size() > 0) {
     read(disk_read_reqs, ctx);
     for (auto &req : disk_read_reqs) {
-      v2::cache.put(req.offset / SECTOR_LEN, (uint8_t *) req.buf, true);
+      v2::cache.put(req.offset / SECTOR_LEN_ODIN, (uint8_t *) req.buf, true);
     }
   }
 
   // ref.
   if (page_ref != nullptr) {
     for (auto &req : read_reqs) {
-      page_ref->push_back(req.offset / SECTOR_LEN);
+      page_ref->push_back(req.offset / SECTOR_LEN_ODIN);
     }
   }
 #else

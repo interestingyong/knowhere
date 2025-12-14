@@ -34,6 +34,9 @@ set(ODINANN_SOURCES
     thirdparty/OdinANN/src/search/beam_search.cpp
     thirdparty/OdinANN/src/search/pipe_search.cpp
     thirdparty/OdinANN/src/ssd_index.cpp
+    thirdparty/OdinANN/src/update/direct_insert.cpp
+    thirdparty/OdinANN/src/update/delete_merge.cpp
+    thirdparty/OdinANN/src/update/dynamic_index.cpp
     thirdparty/OdinANN/src/utils/utils.cpp
 )
 

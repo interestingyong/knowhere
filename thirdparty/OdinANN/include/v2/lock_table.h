@@ -4,7 +4,7 @@
 #include "libcuckoo/cuckoohash_map.hh"
 #include "log.h"
 
-#define SECTOR_LEN 4096
+#define SECTOR_LEN_ODIN 4096
 
 inline void thread_pause() {
   // Use pause instruction to reduce contention in tight loops.

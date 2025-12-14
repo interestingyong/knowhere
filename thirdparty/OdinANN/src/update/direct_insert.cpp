@@ -17,8 +17,10 @@
 #include "v2/page_cache.h"
 
 #include <unistd.h>
+#include "knowhere/comp/knowhere_config.h"
 #include <sys/syscall.h>
 #include "linux_aligned_file_reader.h"
+
 
 namespace pipeann {
   template<typename T, typename TagT>
@@ -79,7 +81,7 @@ namespace pipeann {
     std::vector<IORequest> pages_to_rmw;
     // ordered because of std::set
     for (auto &page_no : pages_to_rmw_set) {
-      pages_to_rmw.push_back(IORequest(page_no * SECTOR_LEN, size_per_io, nullptr, 0, 0));
+      pages_to_rmw.push_back(IORequest(page_no * SECTOR_LEN_ODIN, size_per_io, nullptr, 0, 0));
     }
     // lock the target and the neighbor ids (ensure that sector_no does not change).
     auto pages_locked = v2::lockReqs(this->page_lock_table, pages_to_rmw);
@@ -90,10 +92,10 @@ namespace pipeann {
 
     auto &update_buf = read_data->update_buf;
     std::vector<IORequest> reads, writes_4k, writes;
-    assert(new_nhood.size() < MAX_N_EDGES);
+    assert(new_nhood.size() < MAX_N_EDGES_ODIN);
     for (uint32_t i = 0; i < new_nhood.size(); ++i) {
       reads.push_back(
-          IORequest(node_sector_no(new_nhood[i]) * SECTOR_LEN, size_per_io, update_buf + i * size_per_io, 0, 0));
+          IORequest(node_sector_no(new_nhood[i]) * SECTOR_LEN_ODIN, size_per_io, update_buf + i * size_per_io, 0, 0));
       page_buf_map[node_sector_no(new_nhood[i])] = update_buf + i * size_per_io;
     }
 
@@ -101,11 +103,11 @@ namespace pipeann {
       auto off = pages_to_rmw[i - new_nhood.size()].offset;
       writes_4k.push_back(IORequest(off, size_per_io, update_buf + i * size_per_io, 0, 0));
       // LOG(INFO) << off / SECTOR_LEN;
-      uint64_t page = off / SECTOR_LEN;
+      uint64_t page = off / SECTOR_LEN_ODIN;
       if (pages_need_to_read.find(page) != pages_need_to_read.end()) {
         reads.push_back(IORequest(off, size_per_io, update_buf + i * size_per_io, 0, 0));
       }
-      page_buf_map[off / SECTOR_LEN] = update_buf + i * size_per_io;
+      page_buf_map[off / SECTOR_LEN_ODIN] = update_buf + i * size_per_io;
     }
 
     // generate continuous writes from 4k writes.
@@ -259,7 +261,7 @@ namespace pipeann {
   void SSDIndex<T, TagT>::bg_io_thread() {
     auto ctx = reader->get_ctx();
     uint8_t *buf = nullptr;
-    pipeann::alloc_aligned((void **) &buf, (MAX_N_EDGES + 1) * SECTOR_LEN, SECTOR_LEN);
+    pipeann::alloc_aligned((void **) &buf, (MAX_N_EDGES_ODIN + 1) * SECTOR_LEN_ODIN, SECTOR_LEN_ODIN);
     auto timer = pipeann::Timer();
     uint64_t n_tasks = 0;
 
@@ -285,6 +287,8 @@ namespace pipeann {
       }
     }
   }
+
+
 
   template class SSDIndex<float>;
   template class SSDIndex<_s8>;

@@ -49,8 +49,8 @@ namespace pipeann {
     void *ctx = reader->get_ctx(IORING_SETUP_SQPOLL);  // use SQ polling only for pipe search.
 #endif
 
-    if (beam_width > MAX_N_SECTOR_READS) {
-      LOG(ERROR) << "Beamwidth can not be higher than MAX_N_SECTOR_READS";
+    if (beam_width > MAX_N_SECTOR_READS_ODIN) {
+      LOG(ERROR) << "Beamwidth can not be higher than MAX_N_SECTOR_READS_ODIN";
       crash();
     }
 
@@ -204,11 +204,11 @@ namespace pipeann {
       uint64_t &cur_buf_idx = query_buf->sector_idx;
       auto buf = sector_scratch + cur_buf_idx * size_per_io;
       auto &req = query_buf->reqs[cur_buf_idx];
-      req = IORequest(static_cast<_u64>(pid) * SECTOR_LEN, size_per_io, buf, u_loc_offset(loc), max_node_len);
+      req = IORequest(static_cast<_u64>(pid) * SECTOR_LEN_ODIN, size_per_io, buf, u_loc_offset(loc), max_node_len);
       reader->send_read_no_alloc(req, ctx);
 
       on_flight_ios.push(io_t{item, pid, loc, &req});
-      cur_buf_idx = (cur_buf_idx + 1) % MAX_N_SECTOR_READS;
+      cur_buf_idx = (cur_buf_idx + 1) % MAX_N_SECTOR_READS_ODIN;
 
       if (stats != nullptr) {
         stats->n_ios++;
@@ -416,8 +416,8 @@ namespace pipeann {
     void *ctx = reader->get_ctx(IORING_SETUP_SQPOLL);
 #endif
 
-    if (beam_width > MAX_N_SECTOR_READS) {
-      LOG(ERROR) << "Beamwidth can not be higher than MAX_N_SECTOR_READS";
+    if (beam_width > MAX_N_SECTOR_READS_ODIN) {
+      LOG(ERROR) << "Beamwidth can not be higher than MAX_N_SECTOR_READS_ODIN";
       crash();
     }
 
@@ -552,11 +552,11 @@ namespace pipeann {
       uint64_t &cur_buf_idx = query_buf->sector_idx;
       auto buf = sector_scratch + cur_buf_idx * size_per_io;
       auto &req = query_buf->reqs[cur_buf_idx];
-      req = IORequest(static_cast<_u64>(pid) * SECTOR_LEN, size_per_io, buf, u_loc_offset(loc), max_node_len);
+      req = IORequest(static_cast<_u64>(pid) * SECTOR_LEN_ODIN, size_per_io, buf, u_loc_offset(loc), max_node_len);
       reader->send_read_no_alloc(req, ctx);
 
       on_flight_ios.push(io_t{item, pid, loc, &req});
-      cur_buf_idx = (cur_buf_idx + 1) % MAX_N_SECTOR_READS;
+      cur_buf_idx = (cur_buf_idx + 1) % MAX_N_SECTOR_READS_ODIN;
 
       if (stats != nullptr) {
         stats->n_ios++;

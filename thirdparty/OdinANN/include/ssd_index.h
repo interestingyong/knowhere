@@ -20,10 +20,10 @@
 #include "neighbor.h"
 #include "index.h"
 
-#define MAX_N_CMPS 16384
-#define MAX_N_EDGES 512
-#define MAX_PQ_CHUNKS 128
-#define SECTOR_LEN 4096
+#define MAX_N_CMPS_ODIN 16384
+#define MAX_N_EDGES_ODIN 512
+#define MAX_PQ_CHUNKS_ODIN 128
+#define SECTOR_LEN_ODIN 4096
 
 constexpr int kIndexSizeFactor = 2;
 
@@ -127,9 +127,9 @@ namespace pipeann {
       return (char *) sector_buf + (nnodes_per_sector == 0 ? 0 : (loc % nnodes_per_sector) * max_node_len);
     }
 
-    // avoid integer overflow when * SECTOR_LEN.
+    // avoid integer overflow when * SECTOR_LEN_ODIN.
     inline uint64_t loc_sector_no(uint64_t loc) {
-      return 1 + (nnodes_per_sector > 0 ? loc / nnodes_per_sector : loc * DIV_ROUND_UP(max_node_len, SECTOR_LEN));
+      return 1 + (nnodes_per_sector > 0 ? loc / nnodes_per_sector : loc * DIV_ROUND_UP(max_node_len, SECTOR_LEN_ODIN));
     }
 
     inline uint64_t sector_to_loc(uint64_t sector_no, uint32_t sector_off) {
@@ -137,23 +137,23 @@ namespace pipeann {
     }
 
     void init_query_buf(QueryBuffer<T> &buf) {
-      _u64 coord_alloc_size = ROUND_UP(MAX_N_CMPS * this->aligned_dim, 256);
+      _u64 coord_alloc_size = ROUND_UP(MAX_N_CMPS_ODIN * this->aligned_dim, 256);
       pipeann::alloc_aligned((void **) &buf.coord_scratch, coord_alloc_size, 256);
-      pipeann::alloc_aligned((void **) &buf.sector_scratch, MAX_N_SECTOR_READS * SECTOR_LEN, SECTOR_LEN);
+      pipeann::alloc_aligned((void **) &buf.sector_scratch, MAX_N_SECTOR_READS_ODIN * SECTOR_LEN_ODIN, SECTOR_LEN_ODIN);
       pipeann::alloc_aligned((void **) &buf.aligned_pq_coord_scratch, 32768 * 32 * sizeof(_u8), 256);
-      pipeann::alloc_aligned((void **) &buf.aligned_pqtable_dist_scratch, 256 * MAX_PQ_CHUNKS * sizeof(float), 256);
+      pipeann::alloc_aligned((void **) &buf.aligned_pqtable_dist_scratch, 256 * MAX_PQ_CHUNKS_ODIN * sizeof(float), 256);
       pipeann::alloc_aligned((void **) &buf.aligned_dist_scratch, 512 * sizeof(float), 256);
       pipeann::alloc_aligned((void **) &buf.aligned_query_T, this->aligned_dim * sizeof(T), 8 * sizeof(T));
-      pipeann::alloc_aligned((void **) &buf.update_buf, (2 * MAX_N_EDGES + 1) * SECTOR_LEN,
-                             SECTOR_LEN);  // 2x for read + write
+      pipeann::alloc_aligned((void **) &buf.update_buf, (2 * MAX_N_EDGES_ODIN + 1) * SECTOR_LEN_ODIN,
+                             SECTOR_LEN_ODIN);  // 2x for read + write
 
       buf.visited = new tsl::robin_set<_u64>(4096);
       buf.page_visited = new tsl::robin_set<unsigned>(4096);
 
-      memset(buf.sector_scratch, 0, MAX_N_SECTOR_READS * SECTOR_LEN);
+      memset(buf.sector_scratch, 0, MAX_N_SECTOR_READS_ODIN * SECTOR_LEN_ODIN);
       memset(buf.coord_scratch, 0, coord_alloc_size);
       memset(buf.aligned_query_T, 0, this->aligned_dim * sizeof(T));
-      memset(buf.update_buf, 0, (2 * MAX_N_EDGES + 1) * SECTOR_LEN);
+      memset(buf.update_buf, 0, (2 * MAX_N_EDGES_ODIN + 1) * SECTOR_LEN_ODIN);
     }
 
     QueryBuffer<T> *pop_query_buf(const T *query) {
