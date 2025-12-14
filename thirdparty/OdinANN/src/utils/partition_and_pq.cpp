@@ -693,7 +693,7 @@ int shard_data_into_clusters(const std::string data_file, float *pivots, const s
 
 template<typename T>
 int partition_with_ram_budget(const std::string data_file, double sampling_rate, double ram_budget, size_t graph_degree,
-                             const std::string partition_file, size_t &num_parts) {
+                             const std::string partition_file, size_t num_parts) {
   size_t train_dim;
   size_t num_train;
   float *train_data_float;
@@ -791,13 +791,13 @@ template void gen_random_slice<int8_t>(const int8_t *inputdata, size_t npts,
                                        size_t &slice_size); 
 template int partition_with_ram_budget<float>(const std::string data_file, const double sampling_rate,
                                               double ram_budget, size_t graph_degree, const std::string partition_file,
-                                              size_t &num_parts);
+                                              size_t num_parts);
 template int partition_with_ram_budget<int8_t>(const std::string data_file, const double sampling_rate,
                                                double ram_budget, size_t graph_degree, const std::string partition_file,
-                                               size_t &num_parts);
+                                               size_t num_parts);
 template int partition_with_ram_budget<uint8_t>(const std::string data_file, const double sampling_rate,
                                                 double ram_budget, size_t graph_degree, const std::string partition_file,
-                                                size_t &num_parts);
+                                                size_t num_parts);
 } // namespace pipeann
 
 
