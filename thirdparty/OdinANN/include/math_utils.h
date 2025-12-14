@@ -2,7 +2,7 @@
 #include <cstdint>
 #include <vector>
 #include <cblas.h>
-
+namespace pipeann {
 namespace math_utils {
 
   float calc_distance(float *vec_1, float *vec_2, size_t dim);
@@ -80,3 +80,4 @@ namespace kmeans {
 
   void kmeanspp_selecting_pivots(float *data, size_t num_points, size_t dim, float *pivot_data, size_t num_centers);
 }  // namespace kmeans
+} // namespace pipeann

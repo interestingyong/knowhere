@@ -17,7 +17,7 @@
 #include <vector>
 #include <queue>
 #include <limits>
-
+namespace pipeann {
 namespace math_utils {
 
 // 定义PivotContainer结构体，修复编译错误
@@ -471,3 +471,5 @@ namespace kmeans {
   }
 
 }  // namespace kmeans
+
+} // namespace pipeann
