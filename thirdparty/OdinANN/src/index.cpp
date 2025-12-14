@@ -27,6 +27,8 @@
 #include "utils.h"
 #include "query_buf.h"
 #include "v2/lock_table.h"
+#include "knowhere/comp/knowhere_config.h"
+
 
 // only L2 implemented. Need to implement inner product search
 
@@ -1872,5 +1874,7 @@ namespace pipeann {
   template class Index<float, uint32_t>;
   template class Index<int8_t, uint32_t>;
   template class Index<uint8_t, uint32_t>;
-  
+
+  template void Index<knowhere::fp16, unsigned int>::save(char const*);
+  template void Index<knowhere::bf16, unsigned int>::save(char const*);
 }  // namespace pipeann

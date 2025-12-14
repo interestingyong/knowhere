@@ -288,7 +288,12 @@ namespace pipeann {
     }
   }
 
-
+  template void SSDIndex<knowhere::bf16, unsigned int>::bg_io_thread();
+  template void SSDIndex<unsigned char, unsigned int>::bg_io_thread();
+  template void SSDIndex<float, unsigned int>::bg_io_thread();
+  template void SSDIndex<signed char, unsigned int>::bg_io_thread();
+  template void SSDIndex<knowhere::fp16, unsigned int>::bg_io_thread();
+  
 
   template class SSDIndex<float>;
   template class SSDIndex<_s8>;
