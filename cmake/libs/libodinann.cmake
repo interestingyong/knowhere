@@ -31,8 +31,11 @@ set(ODINANN_SOURCES
     thirdparty/OdinANN/src/utils/linux_aligned_file_reader.cpp
     thirdparty/OdinANN/src/utils/math_utils.cpp
     thirdparty/OdinANN/src/utils/partition_and_pq.cpp
+    thirdparty/OdinANN/src/utils/prune_neighbors.cpp
     thirdparty/OdinANN/src/search/beam_search.cpp
     thirdparty/OdinANN/src/search/pipe_search.cpp
+    thirdparty/OdinANN/src/search/page_search.cpp
+    thirdparty/OdinANN/src/search/coro_search.cpp
     thirdparty/OdinANN/src/ssd_index.cpp
     thirdparty/OdinANN/src/update/direct_insert.cpp
     thirdparty/OdinANN/src/update/delete_merge.cpp

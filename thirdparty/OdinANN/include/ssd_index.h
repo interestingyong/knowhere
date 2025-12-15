@@ -295,7 +295,7 @@ namespace pipeann {
                          std::vector<uint32_t> &pruned_list);
     void occlude_list_pq(std::vector<Neighbor> &pool, std::vector<Neighbor> &result, std::vector<float> &occlude_factor,
                          uint8_t *scratch);
-    void prune_neighbors_pq(std::vector<Neighbor> &pool, std::vector<uint32_t> &pruned_list, uint8_t *scratch);
+    void prune_neighbors_pq(std::vector<Neighbor> &pool, std::vector<uint32_t> &pruned_list, unsigned char *scratch);
 
     // delta pruning.
     struct TriangleNeighbor {

@@ -19,6 +19,7 @@
 #include <unistd.h>
 #include <sys/syscall.h>
 #include "linux_aligned_file_reader.h"
+#include "knowhere/comp/knowhere_config.h"
 
 namespace pipeann {
   template<typename T, typename TagT>
@@ -307,6 +308,18 @@ namespace pipeann {
     return res_count;
   }
 
+  template size_t SSDIndex<knowhere::bf16, unsigned int>::beam_search(
+      knowhere::bf16 const *, unsigned long, unsigned int, unsigned long, unsigned int *, float *, unsigned long,
+      pipeann::QueryStats *,
+      tsl::robin_set<unsigned int, std::hash<unsigned int>, std::equal_to<unsigned int>, std::allocator<unsigned int>,
+                     false, tsl::rh::power_of_two_growth_policy<2ul>> *,
+      bool);
+  template size_t SSDIndex<knowhere::fp16, unsigned int>::beam_search(
+      knowhere::fp16 const *, unsigned long, unsigned int, unsigned long, unsigned int *, float *, unsigned long,
+      pipeann::QueryStats *,
+      tsl::robin_set<unsigned int, std::hash<unsigned int>, std::equal_to<unsigned int>, std::allocator<unsigned int>,
+                     false, tsl::rh::power_of_two_growth_policy<2ul>> *,
+      bool);
   template class SSDIndex<float>;
   template class SSDIndex<_s8>;
   template class SSDIndex<_u8>;
