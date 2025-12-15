@@ -98,7 +98,7 @@ namespace pipeann {
 
   template<typename T, typename TagT>
   void SSDIndex<T, TagT>::prune_neighbors_pq(std::vector<Neighbor> &pool, std::vector<uint32_t> &pruned_list,
-                                             uint8_t *scratch) {
+                                             unsigned char *scratch) {
     if (pool.size() == 0)
       return;
 
@@ -235,6 +235,9 @@ namespace pipeann {
     }
   }
 
+
+  template void  SSDIndex<unsigned char, unsigned int>::prune_neighbors_pq(std::vector<Neighbor> &pool, std::vector<uint32_t> &pruned_list,
+                                             unsigned char *scratch);                                        
   template class SSDIndex<float>;
   template class SSDIndex<_s8>;
   template class SSDIndex<_u8>;

@@ -3,6 +3,7 @@
 #include <cassert>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <ctime>
 #include <fstream>
@@ -28,7 +29,6 @@
 #include "query_buf.h"
 #include "v2/lock_table.h"
 #include "knowhere/comp/knowhere_config.h"
-
 
 // only L2 implemented. Need to implement inner product search
 
@@ -733,7 +733,7 @@ namespace pipeann {
             continue;
           float djk = _distance->compare(_data + _aligned_dim * (size_t) pool[t].id,
                                          _data + _aligned_dim * (size_t) p.id, (unsigned) _aligned_dim);
-          occlude_factor[t] = (std::max)(occlude_factor[t], pool[t].distance / djk);
+          occlude_factor[t] = (std::max) (occlude_factor[t], pool[t].distance / djk);
         }
         start++;
       }
@@ -752,7 +752,7 @@ namespace pipeann {
       crash();
     }
 
-    _width = (std::max)(_width, range);
+    _width = (std::max) (_width, range);
 
     // sort the pool based on distance to query
     std::sort(pool.begin(), pool.end());
@@ -979,8 +979,8 @@ namespace pipeann {
     size_t max = 0, min = 1 << 30, total = 0, cnt = 0;
     for (size_t i = 0; i < _nd; i++) {
       auto &pool = _final_graph[i];
-      max = (std::max)(max, pool.size());
-      min = (std::min)(min, pool.size());
+      max = (std::max) (max, pool.size());
+      min = (std::min) (min, pool.size());
       total += pool.size();
       if (pool.size() < 2)
         cnt++;
@@ -991,7 +991,7 @@ namespace pipeann {
       LOG(INFO) << "Index built with degree: max:" << max << "  avg:" << (float) total / (float) (_nd + _num_frozen_pts)
                 << "  min:" << min << "  count(deg<2):" << cnt;
     }
-    _width = (std::max)((unsigned) max, _width);
+    _width = (std::max) ((unsigned) max, _width);
     _has_built = true;
   }
 
@@ -1062,8 +1062,8 @@ namespace pipeann {
     size_t max = 0, min = 1 << 30, total = 0, cnt = 0;
     for (size_t i = 0; i < _nd; i++) {
       auto &pool = _final_graph[i];
-      max = (std::max)(max, pool.size());
-      min = (std::min)(min, pool.size());
+      max = (std::max) (max, pool.size());
+      min = (std::min) (min, pool.size());
       total += pool.size();
       if (pool.size() < 2)
         cnt++;
@@ -1074,7 +1074,7 @@ namespace pipeann {
       LOG(INFO) << "Index built with degree: max:" << max << "  avg:" << (float) total / (float) (_nd + _num_frozen_pts)
                 << "  min:" << min << "  count(deg<2):" << cnt;
     }
-    _width = (std::max)((unsigned) max, _width);
+    _width = (std::max) ((unsigned) max, _width);
     _has_built = true;
   }
 
@@ -1875,6 +1875,34 @@ namespace pipeann {
   template class Index<int8_t, uint32_t>;
   template class Index<uint8_t, uint32_t>;
 
-  template void Index<knowhere::fp16, unsigned int>::save(char const*);
-  template void Index<knowhere::bf16, unsigned int>::save(char const*);
+  template Index<knowhere::bf16, unsigned int>::Index(pipeann::Metric, unsigned long, unsigned long, bool, bool, bool);
+  template Index<knowhere::fp16, unsigned int>::Index(pipeann::Metric, unsigned long, unsigned long, bool, bool, bool);
+  template Index<knowhere::bf16, unsigned int>::~Index();
+  template Index<knowhere::fp16, unsigned int>::~Index();
+  
+  template void Index<knowhere::fp16, unsigned int>::save(char const *);
+  template void Index<knowhere::bf16, unsigned int>::save(char const *);
+  template void Index<knowhere::fp16, unsigned int>::load(char const *);
+  template void Index<knowhere::bf16, unsigned int>::load(char const *);
+  template size_t Index<knowhere::fp16, unsigned int>::search_with_tags(knowhere::fp16 const *, unsigned long,
+                                                                        unsigned int, unsigned int *, float *);
+  template size_t Index<knowhere::bf16, unsigned int>::search_with_tags(knowhere::bf16 const *, unsigned long,
+                                                                        unsigned int, unsigned int *, float *);
+  template uint32_t Index<knowhere::fp16, unsigned int>::search_with_tags_fast(knowhere::fp16 const *, unsigned int,
+                                                                               unsigned int *, float *);
+  template uint32_t Index<knowhere::bf16, unsigned int>::search_with_tags_fast(knowhere::bf16 const *, unsigned int,
+                                                                               unsigned int *, float *);
+  template void Index<knowhere::fp16, unsigned int>::build(char const *, unsigned long, pipeann::Parameters &,
+                                                           char const *);
+
+  template void Index<knowhere::fp16, unsigned int>::build(
+      char const *, unsigned long, pipeann::Parameters &,
+      std::vector<unsigned int, std::allocator<unsigned int>> const &);
+
+  template void Index<knowhere::bf16, unsigned int>::build(
+      char const *, unsigned long, pipeann::Parameters &,
+      std::vector<unsigned int, std::allocator<unsigned int>> const &);
+
+  template void Index<knowhere::bf16, unsigned int>::build(char const *, unsigned long, pipeann::Parameters &,
+                                                           char const *);
 }  // namespace pipeann

@@ -29,6 +29,8 @@
 #include "utils.h"
 
 #define NUM_KMEANS 15
+#include "knowhere/comp/knowhere_config.h"
+
 
 namespace pipeann {
 
@@ -91,7 +93,7 @@ namespace pipeann {
   }
 
   size_t calculate_num_pq_chunks(double final_index_ram_limit, size_t points_num, uint32_t dim) {
-    size_t num_pq_chunks = (size_t) (std::floor)(_u64(final_index_ram_limit / (double) points_num));
+    size_t num_pq_chunks = (size_t) (std::floor) (_u64(final_index_ram_limit / (double) points_num));
 
     LOG(INFO) << "Calculated num_pq_chunks :" << num_pq_chunks;
     num_pq_chunks = num_pq_chunks <= 0 ? 1 : num_pq_chunks;
@@ -308,7 +310,7 @@ namespace pipeann {
       if (cur_id < node_id) {
         // random_shuffle() is deprecated.
         std::shuffle(final_nhood.begin(), final_nhood.end(), urng);
-        nnbrs = (unsigned) (std::min)(final_nhood.size(), (uint64_t) max_degree);
+        nnbrs = (unsigned) (std::min) (final_nhood.size(), (uint64_t) max_degree);
         // write into merged ofstream
         diskann_writer.write((char *) &nnbrs, sizeof(unsigned));
         diskann_writer.write((char *) final_nhood.data(), nnbrs * sizeof(unsigned));
@@ -338,7 +340,7 @@ namespace pipeann {
 
     // random_shuffle() is deprecated.
     std::shuffle(final_nhood.begin(), final_nhood.end(), urng);
-    nnbrs = (unsigned) (std::min)(final_nhood.size(), (uint64_t) max_degree);
+    nnbrs = (unsigned) (std::min) (final_nhood.size(), (uint64_t) max_degree);
     // write into merged ofstream
     diskann_writer.write((char *) &nnbrs, sizeof(unsigned));
     diskann_writer.write((char *) final_nhood.data(), nnbrs * sizeof(unsigned));
@@ -531,9 +533,9 @@ namespace pipeann {
     output_file_meta.push_back(disk_index_file_size);
 
     diskann_writer.write(sector_buf.get(), SECTOR_LEN_ODIN);  // write out the empty
-                                                         // first sector, will
-                                                         // be populated at the
-                                                         // end.
+                                                              // first sector, will
+                                                              // be populated at the
+                                                              // end.
 
     std::unique_ptr<T[]> cur_node_coords = std::make_unique<T[]>(ndims_64);
     LOG(INFO) << "# sectors: " << n_sectors;
@@ -557,7 +559,7 @@ namespace pipeann {
           }
 
           // read node's nhood
-          vamana_reader.read((char *) nhood_buf, (std::min)(nnbrs, width_u32) * sizeof(unsigned));
+          vamana_reader.read((char *) nhood_buf, (std::min) (nnbrs, width_u32) * sizeof(unsigned));
           if (nnbrs > width_u32) {
             vamana_reader.seekg((nnbrs - width_u32) * sizeof(unsigned), vamana_reader.cur);
           }
@@ -568,11 +570,11 @@ namespace pipeann {
           memcpy(node_buf.get(), cur_node_coords.get(), ndims_64 * sizeof(T));
 
           // write nnbrs
-          *(unsigned *) (node_buf.get() + ndims_64 * sizeof(T)) = (std::min)(nnbrs, width_u32);
+          *(unsigned *) (node_buf.get() + ndims_64 * sizeof(T)) = (std::min) (nnbrs, width_u32);
 
           // write nhood next
           memcpy(node_buf.get() + ndims_64 * sizeof(T) + sizeof(unsigned), nhood_buf,
-                 (std::min)(nnbrs, width_u32) * sizeof(unsigned));
+                 (std::min) (nnbrs, width_u32) * sizeof(unsigned));
 
           // get offset into sector_buf
           char *sector_node_buf = sector_buf.get() + (sector_node_id * max_node_len);
@@ -597,7 +599,7 @@ namespace pipeann {
         vamana_reader.read((char *) &nnbrs, sizeof(uint32_t));
 
         // read node's nhood
-        vamana_reader.read((char *) nhood_buf, (std::min)(nnbrs, width_u32) * sizeof(uint32_t));
+        vamana_reader.read((char *) nhood_buf, (std::min) (nnbrs, width_u32) * sizeof(uint32_t));
         if (nnbrs > width_u32) {
           vamana_reader.seekg((nnbrs - width_u32) * sizeof(uint32_t), vamana_reader.cur);
         }
@@ -608,11 +610,11 @@ namespace pipeann {
         memcpy(multisector_buf.get(), cur_node_coords.get(), ndims_64 * sizeof(T));
 
         // write nnbrs
-        *(uint32_t *) (multisector_buf.get() + ndims_64 * sizeof(T)) = (std::min)(nnbrs, width_u32);
+        *(uint32_t *) (multisector_buf.get() + ndims_64 * sizeof(T)) = (std::min) (nnbrs, width_u32);
 
         // write nhood next
         memcpy(multisector_buf.get() + ndims_64 * sizeof(T) + sizeof(uint32_t), nhood_buf,
-               (std::min)(nnbrs, width_u32) * sizeof(uint32_t));
+               (std::min) (nnbrs, width_u32) * sizeof(uint32_t));
 
         // flush sector to disk
         diskann_writer.write(multisector_buf.get(), nsectors_per_node * SECTOR_LEN_ODIN);
@@ -758,7 +760,7 @@ namespace pipeann {
     LOG(INFO) << "Generating PQ pivots with training data of size: " << train_size
               << " num PQ chunks: " << num_pq_chunks;
     pipeann::generate_pq_pivots(train_data, train_size, (uint32_t) dim, 256, (uint32_t) num_pq_chunks, NUM_KMEANS,
-                       pq_pivots_path);
+                                pq_pivots_path);
     auto end = std::chrono::high_resolution_clock::now();
 
     LOG(INFO) << "Pivots generated in " << std::chrono::duration<double>(end - start).count() << "s.";
@@ -991,4 +993,8 @@ namespace pipeann {
                                                   double ram_budget, std::string mem_index_path,
                                                   std::string medoids_path, std::string centroids_file,
                                                   const char *tag_file);
+  template bool build_disk_index<knowhere::bf16, unsigned int>(char const *, char const *, char const *, pipeann::Metric,
+                                                          bool, char const *);
+  template bool build_disk_index<knowhere::fp16, unsigned int>(char const *, char const *, char const *, pipeann::Metric,
+                                                          bool, char const *);
 };  // namespace pipeann

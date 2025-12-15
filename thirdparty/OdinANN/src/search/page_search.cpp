@@ -20,6 +20,8 @@
 #include <unistd.h>
 #include <sys/syscall.h>
 #include "linux_aligned_file_reader.h"
+#include "knowhere/comp/knowhere_config.h"
+
 
 namespace pipeann {
 
@@ -393,6 +395,10 @@ namespace pipeann {
     return t;
   }
 
+  template void SSDIndex<knowhere::fp16, unsigned int>::load_page_layout(const std::string &index_prefix, const _u64 nnodes_per_sector,
+                                           const _u64 num_points);
+  template void SSDIndex<knowhere::bf16, unsigned int>::load_page_layout(const std::string &index_prefix, const _u64 nnodes_per_sector,
+                                           const _u64 num_points);
   template class SSDIndex<float>;
   template class SSDIndex<_s8>;
   template class SSDIndex<_u8>;

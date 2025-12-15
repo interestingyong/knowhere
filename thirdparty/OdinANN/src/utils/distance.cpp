@@ -6,6 +6,8 @@
 
 #include "utils.h"
 #include "distance.h"
+#include "knowhere/comp/knowhere_config.h"
+
 
 namespace pipeann {
   template<typename T>
@@ -497,6 +499,8 @@ Distance<T> *get_distance_function(Metric m) {
 }
 
 // 显式实例化Distance函数模板
+template Distance<knowhere::bf16> *get_distance_function<knowhere::bf16>(Metric m);
+template Distance<knowhere::fp16> *get_distance_function<knowhere::fp16>(Metric m);
 template Distance<float> *get_distance_function<float>(Metric m);
 template Distance<int8_t> *get_distance_function<int8_t>(Metric m);
 template Distance<uint8_t> *get_distance_function<uint8_t>(Metric m);

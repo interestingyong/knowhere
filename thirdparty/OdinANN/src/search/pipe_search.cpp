@@ -20,6 +20,9 @@
 #ifndef USE_AIO
 #include "liburing.h"
 #endif
+
+#include "knowhere/comp/knowhere_config.h"
+
 namespace pipeann {
   struct io_t {
     Neighbor nbr;
@@ -582,8 +585,7 @@ namespace pipeann {
       unsigned n_sent = 0, marker = 0;
       while (marker < cur_list_size && n_sent < n) {
         while (marker < cur_list_size &&
-               (retset[marker].flag == false ||
-                id_buf_map.find(retset[marker].id) != id_buf_map.end())) {
+               (retset[marker].flag == false || id_buf_map.find(retset[marker].id) != id_buf_map.end())) {
           retset[marker].flag = false;
           ++marker;
         }
@@ -610,8 +612,7 @@ namespace pipeann {
       }
 
       for (unsigned i = 0; i < cur_list_size; ++i) {
-        if (!retset[i].visited && retset[i].flag &&
-            id_buf_map.find(retset[i].id) == id_buf_map.end()) {
+        if (!retset[i].visited && retset[i].flag && id_buf_map.find(retset[i].id) == id_buf_map.end()) {
           first_unvisited_eager = i;
           break;
         }
@@ -711,4 +712,10 @@ namespace pipeann {
     return t;
   }
 
+  template size_t pipeann::SSDIndex<knowhere::bf16, unsigned int>::pipe_search_with_outer_memindex(
+      knowhere::bf16 const *, unsigned long, unsigned int, unsigned long, unsigned int *, float *, unsigned long,
+      pipeann::Index<knowhere::bf16, unsigned int> *, pipeann::QueryStats *);
+  template size_t pipeann::SSDIndex<knowhere::fp16, unsigned int>::pipe_search_with_outer_memindex(
+      knowhere::fp16 const *, unsigned long, unsigned int, unsigned long, unsigned int *, float *, unsigned long,
+      pipeann::Index<knowhere::fp16, unsigned int> *, pipeann::QueryStats *);
 }  // namespace pipeann
