@@ -53,9 +53,30 @@ RUN apt update \
 #RUN  apt install -y liburing-dev 
 
 #COPY knowhere /knowhere
-# 构建knowhere
+ 构建knowhere
 #RUN cd knowhere \
 #    && mkdir -p build && cd build \
 #    && conan install .. --build=missing -o with_ut=True -o with_diskann=True -o with_odinann=True -s compiler.libcxx=libstdc++11 -s build_type=Release \
     #&& conan build .. \
     #&& cd ../.. && rm -rf knowhere
+
+
+#docker build -f knowhere/ci/docker/builder/cpu/ubuntu22.04/arm64/Dockerfile -t knowhere-builder .
+# docker run -it  --name knowhere-debug \
+ # -v ~/wy/knowhere:/knowhere \
+ # knowhere-builder \
+ # /bin/bash
+  
+ # docker start/stop knowhere-debug
+  
+
+  
+#4.手动执行前面dockerfile编译命令
+ # docker exec -it knowhere-debug bash
+ #cd knowhere 
+ # mkdir -p build && cd build 
+  
+  
+ #conan install .. --build=missing -o with_ut=True -o with_diskann=True -o with_odinann=True -s compiler.libcxx=libstdc++11 -s build_type=Release 
+ 
+ #   conan build .. 
