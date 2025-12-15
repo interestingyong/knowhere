@@ -50,7 +50,7 @@ RUN apt update \
     && pip3 install conan==1.61.0 \
     && conan remote add default-conan-local https://milvus01.jfrog.io/artifactory/api/conan/default-conan-local
 
-RUN  apt install -y liburing-dev 
+#RUN  apt install -y liburing-dev 
 
 #COPY knowhere /knowhere
 # 构建knowhere
