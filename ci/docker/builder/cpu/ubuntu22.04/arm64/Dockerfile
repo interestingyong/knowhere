@@ -53,7 +53,6 @@ RUN apt update \
 #RUN  apt install -y liburing-dev 
 
 #COPY knowhere /knowhere
- 构建knowhere
 #RUN cd knowhere \
 #    && mkdir -p build && cd build \
 #    && conan install .. --build=missing -o with_ut=True -o with_diskann=True -o with_odinann=True -s compiler.libcxx=libstdc++11 -s build_type=Release \

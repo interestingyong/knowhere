@@ -55,6 +55,7 @@ class OdinANNIndexNode : public IndexNode {
         auto odinann_index_pack = dynamic_cast<const Pack<std::shared_ptr<milvus::FileManager>>*>(&object);
         assert(odinann_index_pack != nullptr);
         file_manager_ = odinann_index_pack->GetPack();
+        LOG_KNOWHERE_INFO_ << "version:" << version << " filemanager: " << file_manager_ <<  " OdinANNIndexNode created.";
     }
 
     Status
@@ -326,6 +327,8 @@ OdinANNIndexNode<DataType>::Build(const DataSetPtr dataset, std::shared_ptr<Conf
                  << build_conf.disk_pq_dims.value();
     std::string index_build_parameters = param_stream.str();
 
+    LOG_KNOWHERE_INFO_ << "datapath: " << build_conf.data_path.value() << " indexprefix: " << index_prefix_  << std::endl;                    
+
     // Call OdinANN build_disk_index
     RETURN_IF_ERROR(TryOdinANNCall([&]() {
         bool res = pipeann::build_disk_index<DataType>(build_conf.data_path.value().c_str(), index_prefix_.c_str(),
@@ -509,7 +512,7 @@ OdinANNIndexNode<DataType>::Deserialize(const BinarySet& binset, std::shared_ptr
     }
 
     index_prefix_ = prep_conf.index_prefix.value();
-
+    LOG_KNOWHERE_INFO_ << "indexprefix: " << index_prefix_ << std::endl;
     // Load files from file manager
     for (auto& filename : GetNecessaryFilenames(index_prefix_)) {
         if (!LoadFile(filename)) {
@@ -610,7 +613,7 @@ OdinANNIndexNode<DataType>::Search(const DataSetPtr dataset, std::unique_ptr<Con
     auto nq = dataset->GetRows();
     auto dim = dataset->GetDim();
     auto xq = static_cast<const DataType*>(dataset->GetTensor());
-
+    LOG_KNOWHERE_INFO_ << "k,lsearch,beamwidth: " << k << " " << lsearch << " " << beamwidth << std::endl;
     if (nq <= 0) {
         return expected<DataSetPtr>::Err(Status::invalid_args, "nq must be >= 1");
     }
@@ -730,7 +733,7 @@ OdinANNIndexNode<DataType>::GetIndexMeta(std::unique_ptr<Config> cfg) const {
         odinann_conf.build_dram_budget_gb.value_or(0), odinann_conf.disk_pq_dims.value_or(0),
         odinann_conf.accelerate_build.value_or(false), odinann_conf.sampling_rate.value_or(0.01f), 
         odinann_conf.mem_index_alpha.value_or(1.2f), Count(), std::vector<int64_t>());
-
+    LOG_KNOWHERE_INFO_ << " data_path:" << odinann_conf.data_path.value() << std::endl;
     Json json_meta;
     nlohmann::to_json(json_meta, meta);
     return GenResultDataSet(json_meta.dump(), "");

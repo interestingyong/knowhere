@@ -43,6 +43,7 @@ class DiskANNIndexNode : public IndexNode {
         auto diskann_index_pack = dynamic_cast<const Pack<std::shared_ptr<milvus::FileManager>>*>(&object);
         assert(diskann_index_pack != nullptr);
         file_manager_ = diskann_index_pack->GetPack();
+        LOG_KNOWHERE_INFO_ << "version:" << version << " filemanager: " << file_manager_ <<  " DiskANNIndexNode created.";
     }
 
     Status
@@ -360,6 +361,7 @@ DiskANNIndexNode<DataType>::Build(const DataSetPtr dataset, std::shared_ptr<Conf
                                                        build_conf.accelerate_build.value(),
                                                        static_cast<uint32_t>(num_nodes_to_cache),
                                                        build_conf.shuffle_build.value()};
+    LOG_KNOWHERE_INFO_ << "datapath: " << data_path << " indexprefix: " << index_prefix_ << std::endl;
     RETURN_IF_ERROR(TryDiskANNCall([&]() {
         int res = diskann::build_disk_index<DataType>(diskann_internal_build_config);
         if (res != 0)
@@ -400,6 +402,7 @@ DiskANNIndexNode<DataType>::Deserialize(const BinarySet& binset, std::shared_ptr
         LOG_KNOWHERE_ERROR_ << "DiskANN file path for deserialize is empty." << std::endl;
         return Status::invalid_param_in_json;
     }
+    LOG_KNOWHERE_INFO_ << "indexprefix: " << index_prefix_ << std::endl;
     index_prefix_ = prep_conf.index_prefix.value();
     bool is_ip = IsMetricType(prep_conf.metric_type.value(), knowhere::metric::IP);
     bool need_norm = IsMetricType(prep_conf.metric_type.value(), knowhere::metric::IP) ||
@@ -616,6 +619,7 @@ DiskANNIndexNode<DataType>::Search(const DataSetPtr dataset, std::unique_ptr<Con
     auto nq = dataset->GetRows();
     auto dim = dataset->GetDim();
     auto xq = static_cast<const DataType*>(dataset->GetTensor());
+    LOG_KNOWHERE_INFO_ << "k,lsearch,beamwidth: " << k << " " << lsearch << " " << beamwidth << std::endl;
 
     feder::diskann::FederResultUniq feder_result;
     if (search_conf.trace_visit.value()) {
@@ -703,7 +707,7 @@ DiskANNIndexNode<DataType>::GetIndexMeta(std::unique_ptr<Config> cfg) const {
                                      diskann_conf.build_dram_budget_gb.value(), diskann_conf.disk_pq_dims.value(),
                                      diskann_conf.accelerate_build.value(), Count(), entry_points);
     std::unordered_set<int64_t> id_set(entry_points.begin(), entry_points.end());
-
+    LOG_KNOWHERE_INFO_ << " data_path:" << diskann_conf.data_path.value() << std::endl;
     Json json_meta, json_id_set;
     nlohmann::to_json(json_meta, meta);
     nlohmann::to_json(json_id_set, id_set);
