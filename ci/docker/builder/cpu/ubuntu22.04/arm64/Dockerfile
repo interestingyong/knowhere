@@ -10,6 +10,11 @@ ENV CCACHE_DIR="ccache-4.9.1"
 ENV CCACHE_SRC_TAR="v4.9.1.tar.gz"
 ENV BFLOAT16_WHL="bfloat16-1.4.0-cp311-cp311-linux_aarch64.whl"
 
+RUN sed -i 's@http://archive.ubuntu.com@http://mirrors.aliyun.com@g' /etc/apt/sources.list && \
+    sed -i 's@http://ports.ubuntu.com@http://mirrors.aliyun.com@g' /etc/apt/sources.list && \
+    sed -i 's@http://security.ubuntu.com@http://mirrors.aliyun.com@g' /etc/apt/sources.list
+
+
 RUN apt update \
     && apt install -y ca-certificates apt-transport-https software-properties-common lsb-release \
     && apt install -y --no-install-recommends wget curl git make gfortran gcc g++ swig libssl-dev \
